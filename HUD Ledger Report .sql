@@ -67,27 +67,36 @@ FROM
 	LEFT JOIN FND_DOC_SEQUENCE_CATEGORIES fdsc ON fdsc.code = xah.doc_category_code 
 	LEFT JOIN GL_JE_SOURCES_B gjs ON gjs.JE_SOURCE_NAME = gjh.je_source
 	LEFT JOIN (
-	           SELECT   
-                   'AP_INVOICES' AS ENTITY_CODE,  
-                   API.INVOICE_ID,  
-                   API.INVOICE_NUM,  
-                   API.PAYMENT_STATUS_FLAG AS PAYMENT_STATUS,  
-                   API.INVOICE_CURRENCY_CODE AS INVOICE_CURRENCY,  
-				   API.INVOICE_AMOUNT,  
-				   API.TOTAL_TAX_AMOUNT AS TAX_AMOUNT,  
-				   POH.SEGMENT1 AS PO_NUMBER,  
-				   POSV.VENDOR_NAME AS PO_VENDOR_NAME,  
-				   api.invoice_date,  
-				   api.created_by,  
-				   api.creation_date,  
-				   api.description AS hdr,  
-				   POSV.SEGMENT1 AS vendor_num,  
-				   200 AS APPL_ID,  
-				   'AP Invoice' AS typ  
-			   FROM   
-			       AP_INVOICES_ALL API  
-				   LEFT JOIN PO_HEADERS_ALL POH ON API.PO_HEADER_ID = POH.PO_HEADER_ID  
-				   INNER JOIN POZ_SUPPLIERS_V POSV ON API.VENDOR_ID = POSV.VENDOR_ID  
+	           SELECT DISTINCT
+                    'AP_INVOICES' AS Entity_code, 
+					aia.invoice_id, 
+					aia.invoice_num, 
+					aia.payment_status_flag AS Payment_status, 
+					aia.invoice_currency_code AS Invoice_currency, 
+					aia.invoice_amount, 
+					aia.total_tax_amount AS Tax_amount,
+					pha.segment1 po_number, 
+					posv.vendor_name AS PO_vendor_name, 
+					aia.invoice_date, 
+					aia.created_by, 
+					aia.creation_date, 
+					aia.description AS Hdr,  
+					posv.segment1 AS vendor_num, 
+					200 AS Appl_id, 
+					'AP Invoice' AS Typ  
+				FROM 
+				    ap_invoices_all aia  
+					INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
+					INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
+					INNER JOIN po_distributions_all pda ON aida.po_distribution_id = pda.po_distribution_id  
+					INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id  
+					INNER JOIN po_headers_all pha ON pha.po_header_id = pla.po_header_id 
+					INNER JOIN poz_suppliers_v posv ON aia.vendor_id = posv.vendor_id
+					INNER JOIN xla_distribution_links xdl ON  aida.INVOICE_DISTRIBUTION_ID = xdl.SOURCE_DISTRIBUTION_ID_NUM_1 AND aida.DISTRIBUTION_LINE_NUMBER = xdl.AE_LINE_NUM
+					INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num
+					INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id
+                WHERE  
+                    aida.reversal_flag = 'N'
   
                UNION ALL  
 			   
