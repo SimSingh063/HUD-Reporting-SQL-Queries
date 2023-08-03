@@ -29,7 +29,7 @@ SELECT DISTINCT
 	TO_CHAR(COALESCE(xah.Accounting_Date, gjh.default_effective_date), 'DD/MM/YYYY') AS GL_Date, 
 	xte.transaction_number, 
 	COALESCE(txn.created_by, gjl.created_by) AS Createdby, 
-	REPLACE(REPLACE(COALESCE(txn.hdr, gjl.Description), CHR(13), ' '), CHR(10), ' ') AS Description, 
+	REPLACE(REPLACE(COALESCE(txn.hdr, xal.description, gjl.Description), CHR(13), ' '), CHR(10), ' ') AS Description, 
 	COALESCE(txn.typ, fdsc.description, 'Journal') AS DocumentType, 
 	txn.PO_NUMBER, 
 	COALESCE(xal.ae_line_num, gjl.je_line_num) AS journal_line,
