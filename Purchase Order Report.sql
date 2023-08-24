@@ -11,6 +11,9 @@ SELECT
     poh.po_header_id,
     pla.line_num AS PO_Line_Number, 
     pla.category_id,
+    pla.from_header_id, 
+    pla.from_line_id,
+    pla.contract_id, 
     CASE 
         WHEN poh.document_status = 'CANCELED' THEN 'Canceled'
         WHEN poh.document_status = 'CLOSED' THEN 'Closed'
@@ -41,7 +44,7 @@ SELECT
     pz.segment1 AS Supplier_num,  
     TO_CHAR(poh.creation_date, 'dd-MM-yyyy') AS Creation_Date,
     TO_CHAR(poh.creation_date, 'MONTH-YY') AS PO_Start_Period,
-    poh.comments, 
+    TRIM(poh.comments) AS Comments, 
     contracts.contract_number, 
     contracts.contract_version, 
     contracts.total_contract_value, 
@@ -99,6 +102,7 @@ FROM
                 okcd.purchasing_pk2_value, 
                 okch.contract_number,
                 okcd.po_line_number, 
+                okcd.purchasing_pk1_value, 
                 okch.major_version AS Contract_Version,
                 okch.estimated_amount AS Total_Contract_Value,
                 okch.start_date, 
@@ -109,12 +113,12 @@ FROM
                 con_own.major_version, 
                 okcl.line_id,  
                 okcl.line_number, 
-                okcl.line_amount, 
+                COALESCE(okcl.line_amount, okch.agreed_amount) AS line_amount, 
                 okcl.Purchasing_category_id
             FROM 
                 okc_k_headers_all_b okch
                 INNER JOIN okc_dts_deliverables_b okcd ON okcd.chr_id = okch.id
-                INNER JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version
+                LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version
                 LEFT JOIN (SELECT 
                             hzp.party_name AS Contract_Owner, 
                             okcp.chr_id, 
@@ -133,7 +137,9 @@ FROM
             WHERE 
                okcd.deliverable_status not in ('INCOMPLETE','CANCELED')
                AND okch.version_type = 'C'
-            ) Contracts ON Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id
+            ) Contracts ON (Contracts.purchasing_pk1_value = pla.from_header_id AND Contracts.purchasing_pk2_value = pla.from_line_id  AND contracts.Purchasing_category_id = pla.category_id)
+                        OR (Contracts.purchasing_pk1_value = pla.contract_id) 
+                        OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id)
 WHERE 
     ppn.name_type = 'GLOBAL'
     AND poh.creation_date between ppn.effective_start_date AND ppn.effective_end_date 
