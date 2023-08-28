@@ -14,6 +14,7 @@ SELECT
     pla.from_header_id, 
     pla.from_line_id,
     pla.contract_id, 
+    pla.line_status, 
     CASE 
         WHEN poh.document_status = 'CANCELED' THEN 'Canceled'
         WHEN poh.document_status = 'CLOSED' THEN 'Closed'
@@ -118,7 +119,7 @@ FROM
             FROM 
                 okc_k_headers_all_b okch
                 INNER JOIN okc_dts_deliverables_b okcd ON okcd.chr_id = okch.id
-                LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version
+                LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version AND okcl.line_id = okcd.cle_id 
                 LEFT JOIN (SELECT 
                             hzp.party_name AS Contract_Owner, 
                             okcp.chr_id, 
@@ -137,8 +138,9 @@ FROM
             WHERE 
                okcd.deliverable_status not in ('INCOMPLETE','CANCELED')
                AND okch.version_type = 'C'
-            ) Contracts ON (Contracts.purchasing_pk1_value = pla.from_header_id AND Contracts.purchasing_pk2_value = pla.from_line_id  AND contracts.Purchasing_category_id = pla.category_id)
+            ) Contracts ON (Contracts.purchasing_pk1_value = pla.from_header_id AND Contracts.purchasing_pk2_value = pla.from_line_id)
                         OR (Contracts.purchasing_pk1_value = pla.contract_id) 
+                        OR ((Contracts.purchasing_pk1_value = pla.contract_id AND Contracts.Purchasing_category_id = pla.category_id) OR (Contracts.purchasing_pk1_value = pla.contract_id)) 
                         OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id)
 WHERE 
     ppn.name_type = 'GLOBAL'
