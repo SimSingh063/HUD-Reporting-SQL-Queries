@@ -118,7 +118,7 @@ FROM
                 okcl.Purchasing_category_id
             FROM 
                 okc_k_headers_all_b okch
-                INNER JOIN okc_dts_deliverables_b okcd ON okcd.chr_id = okch.id
+                INNER JOIN okc_dts_deliverables_b okcd ON okcd.chr_id = okch.id AND okcd.deliverable_status not in ('INCOMPLETE','CANCELED')
                 LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version AND okcl.line_id = okcd.cle_id 
                 LEFT JOIN (SELECT 
                             hzp.party_name AS Contract_Owner, 
@@ -136,8 +136,7 @@ FROM
                                 AND okcc.cro_code = 'CONTRACT_ADMIN' /* Assiging people with CONTRACT_ADMIN code as Contract Owner */
                            ) Con_own ON con_own.chr_id = okch.id AND  con_own.major_version = okch.major_version          
             WHERE 
-               okcd.deliverable_status not in ('INCOMPLETE','CANCELED')
-               AND okch.version_type = 'C'
+               okch.version_type = 'C'
             ) Contracts ON (Contracts.purchasing_pk1_value = pla.from_header_id AND Contracts.purchasing_pk2_value = pla.from_line_id)
                         OR (Contracts.purchasing_pk1_value = pla.contract_id) 
                         OR ((Contracts.purchasing_pk1_value = pla.contract_id AND Contracts.Purchasing_category_id = pla.category_id) OR (Contracts.purchasing_pk1_value = pla.contract_id)) 
@@ -154,13 +153,14 @@ WHERE
     AND (COALESCE(NULL, :Activity) IS NULL OR ffv.flex_value IN (:Activity))
     AND (COALESCE(NULL, :PO_Value) IS NULL OR pol.PO_Value IN (:PO_Value))
     AND (COALESCE(NULL, :Contract_Type) IS NULL OR contracts.contract_type IN (:Contract_Type))
-    AND (COALESCE(NULL, :Contract_Group) IS NULL OR contracts.contract_group IN (:Contract_Group))
     AND (COALESCE(NULL, :Period_Name) IS NULL OR TO_CHAR(poh.creation_date, 'Month-YY') IN (:Period_Name))
     AND (COALESCE(NULL, :Contract_Period) IS NULL OR TO_CHAR(contracts.start_date, 'Month-YY') IN (:Contract_Period))
     AND poh.creation_date BETWEEN NVL (:DATE_FROM, TO_DATE('01/01/1900', 'DD/MM/YYYY')) AND NVL (:DATE_TO, TO_DATE('01/01/2100', 'DD/MM/YYYY'))
 ORDER BY 
     poh.segment1, 
-    pla.line_num
+    pla.line_num, 
+    contracts.contract_number, 
+    contracts.line_number
     
 /* ---------------------------------- Filters --------------------------------------- */
 /* Document Status */
