@@ -118,19 +118,3 @@ ORDER BY
     invoices.invoice_line_number
 
 Invoice id = 272007
-
-
-SELECT
-    Period_name
-FROM
-    (SELECT
-        DISTINCT period_name, 
-		EXTRACT(MONTH FROM aila.creation_date) Period_Month,
-	    EXTRACT(YEAR FROM aila.creation_date) Period_Year
-     FROM
-        ap_invoice_lines_all aila
-     ORDER BY 
-        Period_year DESC,
-		Period_month DESC, 
-        period_name 
-	)Period	
