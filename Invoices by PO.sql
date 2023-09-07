@@ -2,7 +2,7 @@ SELECT
     poh.segment1 AS Purchase_Order_Number,
     poh.po_header_id,
     pla.line_num AS PO_Line_Number, 
-    ecb.category_code, 
+    ecb.Category_code AS categorycode, 
     CONCAT(UPPER(SUBSTR(poh.document_status, 1, 1)), LOWER(SUBSTR(poh.document_status, 2))) AS document_status,
     CONCAT(UPPER(SUBSTR(pla.line_status, 1, 1)), LOWER(SUBSTR(pla.line_status, 2))) AS PO_line_status,
     pol.assessable_value, 
@@ -106,6 +106,7 @@ WHERE
     AND (COALESCE(NULL, :Party_Name) IS NULL OR hp.party_name IN (:Party_Name))
     AND (COALESCE(NULL, :PO_Number) IS NULL OR poh.segment1 IN (:PO_Number))
     AND (COALESCE(NULL, :Activity) IS NULL OR ffv.flex_value IN (:Activity))
+    AND (COALESCE(NULL, :Category_Code) IS NULL OR ecb.category_id IN (:Category_Code))
     AND (COALESCE(NULL, :PO_Value) IS NULL OR pol.Purchase_Order_Value IN (:PO_Value))
     AND (COALESCE(NULL, :Period_Name) IS NULL OR TO_CHAR(invoices.invoice_date, 'Month-YY') IN (:Period_Name))
 ORDER BY 
@@ -155,9 +156,13 @@ ORDER BY
 
 /* Cost Centre */
 SELECT 
-    DISTINCT segment2 
+    DISTINCT gcc.segment2 
 FROM 
-    GL_CODE_COMBINATIONS
+    PO_HEADERS_ALL poh 
+    INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
+    INNER JOIN PO_LINE_LOCATIONS_ALL pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
+    INNER JOIN PO_DISTRIBUTIONS_ALL pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pol.line_location_id 
+    INNER JOIN GL_CODE_COMBINATIONS gcc ON gcc.code_combination_id = pod.code_combination_id
 ORDER BY 
     segment2 
 
@@ -199,3 +204,18 @@ PO_HEADERS_ALL poh
     INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
     INNER JOIN PO_LINE_LOCATIONS_ALL pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
     INNER JOIN PO_DISTRIBUTIONS_ALL pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pol.line_location_id
+ORDER BY 
+    poh.segment1
+
+/* Category Code */
+SELECT 
+    DISTINCT ecb.category_code, 
+    ecb.category_id
+FROM 
+    PO_HEADERS_ALL poh 
+    INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
+    INNER JOIN PO_LINE_LOCATIONS_ALL pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
+    INNER JOIN PO_DISTRIBUTIONS_ALL pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pol.line_location_id 
+    INNER JOIN EGP_CATEGORIES_B ecb ON ecb.category_id = pla.category_id 
+ORDER BY 
+    ecb.category_id
