@@ -76,11 +76,13 @@ FROM
     INNER JOIN (
                 SELECT 
                     aia.invoice_id, 
-                    aila.line_number AS invoice_line_number, 
                     aila.period_name,
                     aia.invoice_num, 
-                    aia.invoice_amount, 
-                    aila.amount AS Invoice_line_amount, 
+                    CASE 
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aia.invoice_amount
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN aila.amount
+                        ELSE (aia.invoice_amount -  aia.total_tax_amount) 
+                    END AS invoice_amount,
                     aia.invoice_date, 
                     aia.created_by, 
                     aia.creation_date AS invoice_creation_date, 
@@ -88,7 +90,19 @@ FROM
                     aia.description AS invoice_desc, 
                     aia.payment_status_flag, 
                     aila.description AS invoice_line_description, 
-                    aida.po_distribution_id
+                    aida.po_distribution_id, 
+                    CASE 
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.amount
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
+                        WHEN aila.amount = (aia.invoice_amount -  aia.total_tax_amount) THEN NULL 
+                        ELSE aila.amount 
+                    END AS invoice_line_amount, 
+                    CASE 
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.line_number
+                        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
+                        WHEN aila.amount = (aia.invoice_amount -  aia.total_tax_amount) THEN NULL
+                        ELSE aila.line_number 
+                    END AS invoice_line_number 
                 FROM 
                     ap_invoices_all aia  
 					INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
