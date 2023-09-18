@@ -26,10 +26,10 @@ SELECT
     invoices.invoice_line_amount,
     TO_CHAR(invoices.invoice_date, 'dd-MM-yyyy') AS invoice_date,
     TO_CHAR(invoices.gl_date, 'dd-MM-yyyy') AS GL_Date, 
-    TO_CHAR(invoices.invoice_date, 'MONTH-YY') AS invoice_date_period,
+    TO_CHAR(invoices.gl_date, 'MONTH-YY') AS GL_date_period,
     CASE  
-        WHEN EXTRACT(MONTH FROM invoice_date) >= 7 THEN TO_CHAR(EXTRACT(YEAR FROM invoice_date)) || '-' || TO_CHAR(EXTRACT(YEAR FROM invoice_date) + 1)  
-        ELSE TO_CHAR(EXTRACT(YEAR FROM invoice_date) - 1) || '-' || TO_CHAR(EXTRACT(YEAR FROM invoice_date))  
+        WHEN EXTRACT(MONTH FROM gl_date) >= 7 THEN TO_CHAR(EXTRACT(YEAR FROM gl_date)) || '-' || TO_CHAR(EXTRACT(YEAR FROM gl_date) + 1)  
+        ELSE TO_CHAR(EXTRACT(YEAR FROM gl_date) - 1) || '-' || TO_CHAR(EXTRACT(YEAR FROM gl_date))  
     END AS FY,
     TO_CHAR(invoices.invoice_creation_date,'dd-MM-yyyy') AS invoice_creation_date, 
     TO_CHAR(invoices.invoice_line_creation_Date,'dd-MM-yyyy') AS invoice_line_creation_date,
