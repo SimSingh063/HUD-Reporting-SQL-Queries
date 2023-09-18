@@ -25,6 +25,7 @@ SELECT
     invoices.invoice_amount, 
     invoices.invoice_line_amount,
     TO_CHAR(invoices.invoice_date, 'dd-MM-yyyy') AS invoice_date,
+    TO_CHAR(invoices.gl_date, 'dd-MM-yyyy') AS GL_Date, 
     TO_CHAR(invoices.invoice_date, 'MONTH-YY') AS invoice_date_period,
     CASE  
         WHEN EXTRACT(MONTH FROM invoice_date) >= 7 THEN TO_CHAR(EXTRACT(YEAR FROM invoice_date)) || '-' || TO_CHAR(EXTRACT(YEAR FROM invoice_date) + 1)  
@@ -86,6 +87,7 @@ FROM
                     aia.invoice_date, 
                     aia.created_by, 
                     aia.creation_date AS invoice_creation_date, 
+                    aia.gl_date, 
                     aila.Creation_Date AS invoice_line_creation_date,
                     aia.description AS invoice_desc, 
                     aia.payment_status_flag, 
@@ -122,7 +124,7 @@ WHERE
     AND (COALESCE(NULL, :Activity) IS NULL OR ffv.flex_value IN (:Activity))
     AND (COALESCE(NULL, :Category_Code) IS NULL OR ecb.category_id IN (:Category_Code))
     AND (COALESCE(NULL, :PO_Value) IS NULL OR pol.Purchase_Order_Value IN (:PO_Value))
-    AND (COALESCE(NULL, :Period_Name) IS NULL OR TO_CHAR(invoices.invoice_date, 'Month-YY') IN (:Period_Name))
+    AND (COALESCE(NULL, :Period_Name) IS NULL OR TO_CHAR(invoices.gl_date, 'Month-YY') IN (:Period_Name))
 ORDER BY 
     poh.segment1, 
     pla.line_num,
@@ -150,9 +152,9 @@ SELECT
 
 FROM(
     SELECT 
-        DISTINCT TO_CHAR(aia.invoice_date, 'Month') AS Month_Created, 
-        TO_CHAR(aia.invoice_date, 'YY') AS Year_Created, 
-        TO_CHAR(aia.invoice_date, 'Month-YY') AS Period_Created
+        DISTINCT TO_CHAR(aia.gl_date, 'Month') AS Month_Created, 
+        TO_CHAR(aia.gl_date, 'YY') AS Year_Created, 
+        TO_CHAR(aia.gl_date, 'Month-YY') AS Period_Created
     FROM 
         ap_invoices_all aia
     ) Period
