@@ -82,7 +82,7 @@ FROM
                     CASE 
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aia.invoice_amount
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN aila.amount
-                        ELSE (aia.invoice_amount -  aia.total_tax_amount) 
+                        ELSE (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) 
                     END AS invoice_amount,
                     aia.invoice_date, 
                     aia.created_by, 
@@ -96,13 +96,13 @@ FROM
                     CASE 
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.amount
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
-                        WHEN aila.amount = (aia.invoice_amount -  aia.total_tax_amount) THEN NULL 
+                        WHEN aila.amount = (aia.invoice_amount - COALESCE(aia.total_tax_amount,0)) THEN NULL 
                         ELSE aila.amount 
                     END AS invoice_line_amount, 
                     CASE 
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.line_number
                         WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
-                        WHEN aila.amount = (aia.invoice_amount -  aia.total_tax_amount) THEN NULL
+                        WHEN aila.amount = (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) THEN NULL
                         ELSE aila.line_number 
                     END AS invoice_line_number 
                 FROM 
