@@ -8,7 +8,7 @@ Description - A custom alert report created for the Procurement team as a part o
 SELECT
     DISTINCT prha.Requisition_number, 
     prha.Description, 
-    prha.document_status AS Status,  
+    CONCAT(UPPER(SUBSTR(prha.document_status, 1, 1)), LOWER(SUBSTR(prha.document_status, 2))) AS Status,
     prla.line_Number, 
     prla.Unit_Price, 
     prla.Quantity, 
