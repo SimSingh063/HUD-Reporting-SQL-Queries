@@ -1,3 +1,12 @@
+/* 
+Title - Invoices by PO Report
+Author - Simranjeet Singh
+Date - 19/09/2023
+Department - Finance 
+Description - Report showcasing all Invoices alongside their respective Purchase Orders. 
+(Note -	Invoices without a purchase order are not included in the report.)
+*/
+
 SELECT 
     poh.segment1 AS Purchase_Order_Number,
     poh.po_header_id,
