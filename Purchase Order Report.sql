@@ -143,7 +143,7 @@ FROM
                         OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id)
 WHERE 
     ppn.name_type = 'GLOBAL'
-    AND poh.creation_date between ppn.effective_start_date AND ppn.effective_end_date 
+    AND (poh.creation_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date OR poh.last_update_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date)
     AND ffv.value_category = 'HUD_ACTIVITY'
     AND (COALESCE(NULL, :CostCentre) IS NULL OR gcc.segment2 IN (:CostCentre))  
     AND (COALESCE(NULL, :DocumentStatus) IS NULL OR poh.document_status IN (:DocumentStatus))
