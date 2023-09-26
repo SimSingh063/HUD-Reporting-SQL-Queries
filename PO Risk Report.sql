@@ -34,8 +34,8 @@ SELECT
     TO_CHAR(Contracts.end_date, 'dd-MM-yyyy') AS Contract_End_Date,
     pod.po_distribution_id, 
     invoices.Total_invoice_Amt AS PO_Amount_Spent,
-    (pol.assessable_value - invoices.Total_invoice_Amt) AS PO_Amount_Left, 
-    invoices.Invoice_count, 
+    (pol.assessable_value - COALESCE(invoices.Total_invoice_Amt,0)) AS PO_Amount_Left, 
+    COALESCE(invoices.Invoice_count,0) AS Invoice_count, 
     invoices.Avg_invoice_Amt AS PO_Avg_Invoice_Amt, 
     FLOOR((pol.assessable_value - invoices.Total_invoice_Amt)/Avg_invoice_Amt) AS Invoices_Remaining, 
     CASE   
@@ -81,22 +81,22 @@ FROM
     INNER JOIN GL_CODE_COMBINATIONS gcc ON gcc.code_combination_id = pod.code_combination_id
     INNER JOIN HZ_PARTIES hp ON pz.party_id = hp.party_id 
     INNER JOIN FND_FLEX_VALUES_VL ffv  ON ffv.flex_value = gcc.segment4
-    INNER JOIN (
+    LEFT JOIN (
                 SELECT 
                     inv.po_distribution_id, 
-                    SUM(
+                    COALESCE(SUM(
                         CASE   
                             WHEN inv.invoice_line_amount IS NULL THEN inv.invoice_amount  
                             ELSE inv.invoice_line_amount  
                         END  
-                        ) AS Total_invoice_Amt,   
-                    COUNT(DISTINCT inv.invoice_id) AS Invoice_count, 
-                    ROUND(SUM(
+                        ),0) AS Total_invoice_Amt,   
+                    COALESCE(COUNT(DISTINCT inv.invoice_id),0) AS Invoice_count, 
+                    COALESCE(ROUND(SUM(
                         CASE   
                             WHEN inv.invoice_line_amount IS NULL THEN inv.invoice_amount  
                             ELSE inv.invoice_line_amount  
                         END  
-                       ) / COUNT(DISTINCT inv.invoice_id),2) AS Avg_invoice_Amt  
+                       ) / NULLIF(COUNT(DISTINCT inv.invoice_id), 0), 2), 0) AS Avg_invoice_Amt 
                 FROM(
                     SELECT 
                         aia.invoice_id, 
@@ -191,8 +191,7 @@ WHERE
     AND pol.Purchase_Order_Value = 'True'
     AND ffv.value_category = 'HUD_ACTIVITY'
     AND ppn.name_type = 'GLOBAL'
-    AND poh.creation_date between ppn.effective_start_date AND ppn.effective_end_date 
-    --AND poh.segment1 = 'PO000633'
+    AND (poh.creation_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date OR poh.last_update_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date) 
     AND (COALESCE(NULL, :DocumentStatus) IS NULL OR poh.document_status IN (:DocumentStatus))
     AND (COALESCE(NULL, :Party_Name) IS NULL OR hp.party_name IN (:Party_Name))
     AND (COALESCE(NULL, :PO_Number) IS NULL OR poh.segment1 IN (:PO_Number))
