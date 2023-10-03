@@ -194,45 +194,62 @@ WHERE
 
 
 /* Invoices */
+
 SELECT 
-    aia.invoice_id, 
-    aila.period_name,
-    aia.invoice_num, 
-    CASE 
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aia.invoice_amount
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN aila.amount
-        ELSE (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) 
-    END AS invoice_amount,
-    aia.invoice_date, 
-    aia.created_by, 
-    aia.creation_date AS invoice_creation_date, 
-    aia.gl_date, 
-    aila.Creation_Date AS invoice_line_creation_date,
-    aia.description AS invoice_desc, 
-    aia.payment_status_flag, 
-    aila.description AS invoice_line_description, 
-    aida.po_distribution_id, 
-    CASE 
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.amount
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
-        WHEN aila.amount = (aia.invoice_amount - COALESCE(aia.total_tax_amount,0)) THEN NULL 
-        ELSE aila.amount 
-    END AS invoice_line_amount, 
-    CASE 
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.line_number
-        WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
-        WHEN aila.amount = (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) THEN NULL
-        ELSE aila.line_number 
-    END AS invoice_line_number 
-FROM 
-    ap_invoices_all aia  
-	INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
-	INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
-WHERE 
-    aia.approval_status = 'APPROVED'
-    AND aila.line_type_lookup_code = 'ITEM'
-    AND aida.line_type_lookup_code = 'ITEM'
-    AND aila.discarded_flag = 'N'
+    inv.invoice_id, 
+    inv.invoice_num, 
+    inv.invoice_desc, 
+    inv.po_distribution_id,
+    inv.created_by, 
+    TO_CHAR(inv.invoice_date, 'dd-MM-yyyy') AS invoice_date, 
+    SUM(COALESCE(invoice_line_amount, invoice_amount)) AS invoice_amount
+FROM(
+    SELECT 
+        aia.invoice_id, 
+        aila.period_name,
+        aia.invoice_num, 
+        CASE 
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aia.invoice_amount
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN aila.amount
+            ELSE (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) 
+        END AS invoice_amount,
+        aia.invoice_date, 
+        aia.created_by, 
+        aia.creation_date AS invoice_creation_date, 
+        aila.Creation_Date AS invoice_line_creation_date,
+        aia.description AS invoice_desc, 
+        aia.payment_status_flag, 
+        aila.description AS invoice_line_description, 
+        aida.po_distribution_id, 
+        CASE 
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.amount
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
+            WHEN aila.amount = (aia.invoice_amount - COALESCE(aia.total_tax_amount,0)) THEN NULL 
+            ELSE aila.amount 
+        END AS invoice_line_amount, 
+        CASE 
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount != aila.amount THEN aila.line_number
+            WHEN aila.tax_classification_code IN ('GST EXEMPT', 'GST ZERO') AND aia.invoice_amount = aila.amount THEN NULL
+            WHEN aila.amount = (aia.invoice_amount -  COALESCE(aia.total_tax_amount,0)) THEN NULL
+            ELSE aila.line_number 
+        END AS invoice_line_number 
+    FROM 
+        ap_invoices_all aia  
+	    INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
+	    INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
+    WHERE 
+        aia.approval_status = 'APPROVED'
+        AND aila.line_type_lookup_code = 'ITEM'
+        AND aida.line_type_lookup_code = 'ITEM'
+        AND aila.discarded_flag = 'N'
+    ) Inv 
+GROUP BY
+    inv.invoice_id, 
+    inv.invoice_num, 
+    inv.invoice_desc, 
+    inv.po_distribution_id,
+    inv.created_by,
+    TO_CHAR(inv.invoice_date, 'dd-MM-yyyy') 
 
 
 /* PO Line Number */
@@ -246,19 +263,7 @@ PO_HEADERS_ALL poh
 WHERE 
     poh.segment1 = :PO_Number
 ORDER BY 
-    poh.segment1
-
-/* Cost Centre */
-SELECT 
-    DISTINCT gcc.segment2 
-FROM 
-    PO_HEADERS_ALL poh 
-    INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
-    INNER JOIN PO_LINE_LOCATIONS_ALL pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
-    INNER JOIN PO_DISTRIBUTIONS_ALL pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pol.line_location_id 
-    INNER JOIN GL_CODE_COMBINATIONS gcc ON gcc.code_combination_id = pod.code_combination_id
-ORDER BY 
-    segment2 
+    pla.line_num
 
 /* PO Number */ 
 SELECT 
