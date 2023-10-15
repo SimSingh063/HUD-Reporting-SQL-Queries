@@ -35,7 +35,7 @@ FROM
 				   pph.position_id, 
 				   ppos.Parent_Position_Name
 			   FROM 
-			       PER_POSITION_HIERARCHY_F pph   
+			       PER_POSITION_HIERARCHY_F pph   /* Logic to get details about the parent position */
 				   INNER JOIN (SELECT 
 				                   DISTINCT apos.position_id, 
 								   apos.name AS Parent_Position_Name
@@ -46,11 +46,11 @@ FROM
                                )ppos ON ppos.position_id = pph.parent_position_id 
 				WHERE 
 				    :data_as_off BETWEEN pph.effective_start_date AND pph.effective_end_date
-			   ) posp ON posp.position_id = pos.position_id
+			   ) posp ON posp.position_id = pos.position_id 
 WHERE 
     :data_as_off BETWEEN Pos.effective_start_date AND pos.effective_end_date
 	AND :data_as_off BETWEEN pd.effective_start_date AND pd.effective_end_date
-	AND pos.active_status = 'A'
+	AND pos.active_status = 'A' /* Filtering out only Active Positions */
 ), 
 
 Person AS (
@@ -72,10 +72,10 @@ FROM
 	FROM 
 	     PER_ALL_ASSIGNMENTS_M aa
 	WHERE 
-		 aa.assignment_type in('E','C') 
+		 aa.assignment_type in('E','C') /* Only looking for people that have an assignment type E (Employee) OR C (Contactor or Consultant)*/
 		 AND :data_as_off BETWEEN aa.effective_start_date AND aa.effective_end_date 
 		 AND aa.effective_latest_change = 'Y'
-		 AND aa.assignment_status_type in ('ACTIVE','SUSPENDED')
+		 AND aa.assignment_status_type in ('ACTIVE','SUSPENDED') 
 	) a
  	INNER JOIN PER_PERSON_NAMES_F p ON p.person_id = a.person_id 
 	INNER JOIN PER_PEOPLE_F ppl ON ppl.person_id = p.person_id
@@ -125,7 +125,7 @@ FROM
 				   PER_ALL_ASSIGNMENTS_M pa 
 				   INNER JOIN HCM_LOOKUPS hcm ON hcm.lookup_code = pa.Employment_Category
 			   WHERE 
-				   hcm.lookup_type = 'EMP_CAT'
+				   hcm.lookup_type = 'EMP_CAT' /* Employment Category */
 				   AND pa.assignment_type in('E','C')
 				   AND pa.effective_latest_change = 'Y'
 				   AND pa.assignment_status_type in ('ACTIVE','SUSPENDED')
