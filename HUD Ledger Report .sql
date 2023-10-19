@@ -28,14 +28,14 @@ SELECT DISTINCT
 	xah.doc_sequence_value AS Document_Sequence_Number, 
 	TO_CHAR(COALESCE(xah.Accounting_Date, gjh.default_effective_date), 'DD/MM/YYYY') AS GL_Date, 
 	xte.transaction_number, 
-	COALESCE(txn.created_by, gjl.created_by) AS Createdby, 
-	REPLACE(REPLACE(COALESCE(txn.hdr, xal.description, gjl.Description), CHR(13), ' '), CHR(10), ' ') AS Description, 
-	COALESCE(txn.typ, fdsc.description, 'Journal') AS DocumentType, 
-	txn.PO_NUMBER, 
+	COALESCE(inv.created_by,txn.created_by, gjl.created_by) AS Createdby, 
+	REPLACE(REPLACE(COALESCE(inv.hdr, txn.hdr, xal.description, gjl.Description), CHR(13), ' '), CHR(10), ' ') AS Description, 
+	COALESCE(inv.typ, txn.typ, fdsc.description, 'Journal') AS DocumentType, 
+	inv.PO_NUMBER, 
 	COALESCE(xal.ae_line_num, gjl.je_line_num) AS journal_line,
 	gl_flexfields_pkg.get_concat_description(gcc.chart_of_accounts_id,gcc.code_combination_id) coa_desc,
 	CASE 
-        WHEN TXN.TYP = 'AP Invoice' THEN TXN.PO_VENDOR_NAME  
+        WHEN inv.TYP = 'AP Invoice' THEN inv.PO_VENDOR_NAME  
         WHEN TXN.TYP = 'Invoice Payments' THEN TXN.PO_VENDOR_NAME  
         ELSE NULL  
     END AS SupplierName,  
@@ -45,7 +45,7 @@ SELECT DISTINCT
         ELSE NULL  
     END AS EmployeeName,  
     CASE
-        WHEN TXN.TYP = 'AP Invoice' THEN TXN.VENDOR_NUM  
+        WHEN inv.TYP = 'AP Invoice' THEN inv.VENDOR_NUM  
         WHEN TXN.TYP = 'Invoice Payments' THEN TXN.VENDOR_NUM  
         ELSE NULL  
     END AS SupplierNum,
@@ -69,6 +69,7 @@ FROM
 	LEFT JOIN (
 	           SELECT DISTINCT
                     'AP_INVOICES' AS Entity_code, 
+                    xah.ae_header_id,
 					aia.invoice_id, 
 					aia.invoice_num, 
 					aia.payment_status_flag AS Payment_status, 
@@ -96,10 +97,12 @@ FROM
 					INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num
 					INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id
                 WHERE  
-                    aida.reversal_flag = 'N'
-  
-               UNION ALL  
-			   
+					aia.approval_status = 'APPROVED'
+                    AND aila.line_type_lookup_code = 'ITEM'
+                    AND aida.line_type_lookup_code = 'ITEM'
+                    AND aila.discarded_flag = 'N'
+                ) inv ON inv.Invoice_id = xte.source_id_int_1 AND inv.appl_id = xte.application_id AND inv.entity_code = xte.entity_code AND inv.ae_header_id = xah.ae_header_id  
+    LEFT JOIN (		   
 			   SELECT   
 			       'AP_INVOICES' AS ENTITY_CODE,  
 				   API.INVOICE_ID,  
@@ -109,7 +112,7 @@ FROM
 				   API.INVOICE_AMOUNT,  
 				   API.TOTAL_TAX_AMOUNT AS TAX_AMOUNT,  
 				   NULL AS PO_NUMBER,  
-				   hp.PARTY_NAME AS Party_Name,  
+				   hp.PARTY_NAME AS PO_VENDOR_NAME,  
 				   api.invoice_date,  
 				   api.created_by,  
 				   api.creation_date,  
@@ -131,7 +134,7 @@ FROM
                UNION ALL 
 
                SELECT   
-                   'TRANSACTIONS' AS ENTITY_CODE,  
+                   'TRANSACTIONS' AS ENTITY_CODE, 
 				   rct.customer_trx_id AS INVOICE_ID,  
 				   rct.trx_number AS INVOICE_NUM,  
 				   NULL AS PAYMENT_STATUS,  
@@ -376,7 +379,7 @@ FROM
 				   'CE' AS typ  
                FROM   
 			       ce_external_transactions cet
-			  )txn	ON txn.Invoice_id = xte.source_id_int_1 AND txn.appl_id = xte.application_id AND txn.entity_code = xte.entity_code			   
+			  )txn ON txn.Invoice_id = xte.source_id_int_1 AND txn.appl_id = xte.application_id AND txn.entity_code = xte.entity_code			   
 WHERE 
 	(COALESCE(NULL, :Status) IS NULL OR gjl.status IN (:Status))  
     AND (COALESCE(NULL, :CostCentre) IS NULL OR gcc.segment2 IN (:CostCentre))  
