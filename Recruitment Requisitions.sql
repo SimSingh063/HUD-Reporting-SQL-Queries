@@ -1,14 +1,36 @@
+/* 
+Title - Active Reruitment and Vacant Positions
+Author - Simranjeet Singh
+Date - 
+Description - Details of all positions that are either vacant or in Active recruitment.  
+*/
+
 WITH Position AS (
 SELECT 
     Pos.Position_Code, 
     Pos.Name, 
 	Pos.Position_ID, 
     Pos.attribute8 AS Group_Team, 
-    Pos.attribute6 AS Position_Type
+    Pos.attribute6 AS Position_Type,
+    grd.grade_code AS Band,
+    pdr.name AS Department,
+    CASE
+	    WHEN lo.internal_location_code IN ('WLG_L7', 'WLG_L8','WLG_L6', 'WLG_L9') THEN 'Wellington' 
+		WHEN lo.internal_location_code IN ('AKL_L7', 'AKL_APO') THEN 'Auckland' 
+		ELSE Lo.Location_name
+	END AS Location,
+    CASE 
+        WHEN pos.full_part_time = 'FULL_TIME' THEN 'Full Time'
+        WHEN pos.full_part_time = 'PART_TIME' THEN 'Part Time'
+    END AS full_part_time
 FROM 
     HR_ALL_POSITIONS_F_VL pos 
+    LEFT JOIN PER_DEPARTMENTS pdr ON pdr.organization_id = pos.organization_id
+    LEFT JOIN HR_LOCATIONS_ALL_F_VL lo ON lo.location_id = pos.location_id
+    LEFT JOIN PER_GRADES_F_VL grd ON grd.grade_id = pos.entry_grade_id
 WHERE 
     TRUNC(SYSDATE) BETWEEN pos.effective_start_date AND pos.effective_end_date
+    AND TRUNC(SYSDATE) BETWEEN pdr.effective_start_date AND pdr.effective_end_date
     AND pos.active_status = 'A' /* Filtering out only Active Positions */
 ), 
 
@@ -46,21 +68,13 @@ SELECT
     irb.hiring_manager_id, 
     irb.manager_assignment_id,  
     irb.worker_type_code,
-    CASE 
-        WHEN irb.full_part_time = 'FULL_TIME' THEN 'Full Time'
-        WHEN irb.full_part_time = 'PART_TIME' THEN 'Part Time'
-    END AS full_part_time,
     irb.job_id, 
-    loc.location_name AS Location, 
     gr.grade_code AS Band, 
-    pd.name AS Department,
     irb.position_id
 FROM 
     irc_requisitions_b irb
     INNER JOIN irc_phases_vl ipv ON ipv.phase_id = irb.current_phase_id 
     INNER JOIN irc_states_vl isv ON isv.state_id = irb.current_state_id 
-    LEFT JOIN PER_DEPARTMENTS pd ON pd.organization_id = irb.department_id
-    LEFT JOIN HR_LOCATIONS_ALL_F_VL loc ON loc.location_id = irb.location_id
     LEFT JOIN PER_GRADES_F_VL gr ON gr.grade_id = irb.grade_id
     LEFT JOIN (
             SELECT 
@@ -86,7 +100,6 @@ FROM
 WHERE 
     isv.name NOT IN ('Canceled', 'Filled', 'Deleted')
     AND isv.type_code = 'REQUISITION'
-    AND TRUNC(SYSDATE) BETWEEN pd.effective_start_date AND pd.effective_end_date
 )
 
 SELECT 
@@ -94,18 +107,34 @@ SELECT
     position.Name, 
     position.Group_Team, 
     position.position_type,
-    assignment.assignment_id,
-    assignment.assignment_name, 
+    position.Location, 
+    position.Department,
+    position.full_part_time, 
     CASE 
         WHEN assignment.assignment_id IS NULL AND rr.requisition_id IS NOT NULL THEN 'Active-Recruitment'
         WHEN assignment.assignment_id IS NULL THEN 'Vacant'
         ELSE 'Occupied'
     END AS Pos_Status, 
-    rr.*, 
+    rr.requisition_id,
+    rr.requisition_number,  
+    rr.filled_date, 
+    rr.open_date, 
+    rr.Requisition_Phase, 
+    rr.Requisition_State, 
+    rr.Candidate_Phase, 
+    rr.Candidate_State, 
+    rr.last_update_date,
+    rr.worker_type_code, 
+    COALESCE(rr.band,position.band) AS Band,
     mgr.Hiring_manager_Name, 
     mgr.Hiring_manager_Number, 
     Mgr_Pos.Hiring_Manager_position_code, 
-    Mgr_Pos.Hiring_Manager_position_Name
+    Mgr_Pos.Hiring_Manager_position_Name, 
+    CASE 
+        WHEN Future_emp.position_id IS NOT NULL THEN 'Yes'
+        ELSE NULL 
+    END AS Future_Incumbent, 
+    TO_CHAR(Future_emp.projected_start_date, 'dd-MM-yyyy') AS projected_start_date
 FROM
     position
     LEFT JOIN assignment ON assignment.position_id = position.position_id 
@@ -149,6 +178,18 @@ FROM
                 AND TRUNC(SYSDATE) BETWEEN paa.effective_start_date AND paa.effective_end_date
                 AND TRUNC(SYSDATE) BETWEEN hap.effective_start_date AND hap.effective_end_date
            ) Mgr_Pos ON Mgr_pos.assignment_id = rr.manager_assignment_id
+    LEFT JOIN (
+            SELECT 
+                pas.assignment_id,
+                pas.position_id, 
+                pas.projected_start_date
+            FROM 
+                PER_ALL_ASSIGNMENTS_M pas
+            WHERE 
+                pas.projected_start_date > TRUNC(SYSDATE)
+                AND pas.assignment_type = 'P' /* Find if there is a pending worker */
+                AND TRUNC(SYSDATE) BETWEEN pas.effective_start_date AND pas.effective_end_date
+            ) Future_emp ON Future_emp.position_id = position.position_id
 WHERE 
     CASE 
         WHEN assignment.assignment_id IS NULL AND rr.requisition_id IS NOT NULL THEN 'Active-Recruitment'
@@ -166,4 +207,9 @@ WHERE
     AND (COALESCE(NULL, :Req_Phase) IS NULL OR rr.Requisition_Phase IN (:Req_Phase))
     AND (COALESCE(NULL, :Can_Phase) IS NULL OR rr.Candidate_Phase IN (:Can_Phase))
 ORDER BY 
+    CASE 
+        WHEN assignment.assignment_id IS NULL AND rr.requisition_id IS NOT NULL THEN 'Active-Recruitment'
+        WHEN assignment.assignment_id IS NULL THEN 'Vacant'
+        ELSE 'Occupied'
+    END,
     position.position_code
