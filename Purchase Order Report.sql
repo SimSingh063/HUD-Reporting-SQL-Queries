@@ -140,10 +140,10 @@ FROM
             ) Contracts ON (Contracts.purchasing_pk1_value = pla.from_header_id AND Contracts.purchasing_pk2_value = pla.from_line_id)
                         OR (Contracts.purchasing_pk1_value = pla.contract_id) 
                         OR ((Contracts.purchasing_pk1_value = pla.contract_id AND Contracts.Purchasing_category_id = pla.category_id) OR (Contracts.purchasing_pk1_value = pla.contract_id)) 
-                        OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id)
+                        OR ((Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id) OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num))
 WHERE 
     ppn.name_type = 'GLOBAL'
-    AND (poh.creation_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date OR poh.last_update_date BETWEEN ppn.effective_start_date AND ppn.effective_end_date)
+    AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
     AND ffv.value_category = 'HUD_ACTIVITY'
     AND (COALESCE(NULL, :CostCentre) IS NULL OR gcc.segment2 IN (:CostCentre))  
     AND (COALESCE(NULL, :DocumentStatus) IS NULL OR poh.document_status IN (:DocumentStatus))

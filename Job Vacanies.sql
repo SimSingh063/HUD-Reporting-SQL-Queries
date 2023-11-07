@@ -1,8 +1,8 @@
 /* 
-Title - Active Reruitment and Vacant Positions
+Title - Job Vacancies
 Author - Simranjeet Singh
-Date - 
-Description - Details of all positions that are either vacant or in Active recruitment.  
+Date - 06-11-2023
+Description - Details of all positions that are either in Active recruitment stage or are just vacant.  
 */
 
 WITH Position AS (
@@ -100,6 +100,7 @@ FROM
 WHERE 
     isv.name NOT IN ('Canceled', 'Filled', 'Deleted')
     AND isv.type_code = 'REQUISITION'
+    AND ipv.type_code = 'REQUISITION'
 )
 
 SELECT 
