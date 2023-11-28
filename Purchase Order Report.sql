@@ -7,7 +7,7 @@ Description - Report showcasing all Purchase Orders alongside their respective C
 */
 
 SELECT 
-    poh.segment1 AS PO_Number,
+    poh.segment1 AS PONumber,
     poh.po_header_id,
     pla.line_num AS PO_Line_Number, 
     pla.category_id,
@@ -35,12 +35,12 @@ SELECT
     pol.quantity_billed, 
     pol.quantity_cancelled, 
     pol.receipt_required_flag, 
-    pol.PO_Value,
+    pol.POValue,
     gcc.segment2 || '-' || gcc.segment3 || '-' || gcc.segment4 AS Cost_Codes,
     ffv.description, 
     ppn.display_name AS full_name, 
-    hou.name AS Business_Unit, 
-    hp.party_name, 
+    hou.name AS BusinessUnit, 
+    hp.party_name AS Supplier_Name, 
     hp.party_number,
     pz.segment1 AS Supplier_num,  
     TO_CHAR(poh.creation_date, 'dd-MM-yyyy') AS Creation_Date,
@@ -52,7 +52,7 @@ SELECT
     TO_CHAR(contracts.start_date, 'dd-MM-yyyy') AS Contract_Start_Date,
     TO_CHAR(contracts.end_date, 'dd-MM-yyyy') AS Contract_End_Date, 
     TO_CHAR(contracts.start_date, 'MONTH-YY') AS Contract_Start_Period,  
-    contracts.contract_type, 
+    contracts.contract_type AS ContractType, 
     contracts.Contract_Group,
     Contracts.contract_owner, 
     Contracts.line_id, 
@@ -85,7 +85,7 @@ FROM
                     CASE 
                         WHEN  pll.assessable_value IS NULL OR pll.assessable_value <= 1 THEN 'False'
                         ELSE 'True'
-                    END PO_Value /* Case statement to allow the user to filter out PO's which have <=1 amount */
+                    END POValue /* Case statement to allow the user to filter out PO's which have <=1 amount */
                 FROM 
                     PO_LINE_LOCATIONS_ALL pll
                 ) pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
@@ -151,7 +151,7 @@ WHERE
     AND (COALESCE(NULL, :Business_Unit) IS NULL OR hou.name IN (:Business_Unit))
     AND (COALESCE(NULL, :PO_Number) IS NULL OR poh.segment1 IN (:PO_Number))
     AND (COALESCE(NULL, :Activity) IS NULL OR ffv.flex_value IN (:Activity))
-    AND (COALESCE(NULL, :PO_Value) IS NULL OR pol.PO_Value IN (:PO_Value))
+    AND (COALESCE(NULL, :PO_Value) IS NULL OR pol.POValue IN (:PO_Value))
     AND (COALESCE(NULL, :Contract_Type) IS NULL OR contracts.contract_type IN (:Contract_Type))
     AND (COALESCE(NULL, :Period_Name) IS NULL OR TO_CHAR(poh.creation_date, 'Month-YY') IN (:Period_Name))
     AND (COALESCE(NULL, :Contract_Period) IS NULL OR TO_CHAR(contracts.start_date, 'Month-YY') IN (:Contract_Period))
