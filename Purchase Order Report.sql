@@ -29,10 +29,10 @@ SELECT
         END AS document_status, 
     poh.currency_code, 
     pol.assessable_value, 
-    pol.quantity_received, 
+    COALESCE(pol.amount_received,pol.quantity_received) AS quantity_received,
     pol.quantity_accepted, 
     pol.quantity_rejected, 
-    pol.quantity_billed, 
+    COALESCE(pol.amount_billed, pol.quantity_billed) AS quantity_billed, 
     pol.quantity_cancelled, 
     pol.receipt_required_flag, 
     pol.POValue,
@@ -71,15 +71,23 @@ FROM
                         ELSE pll.assessable_value
                     END AS assessable_value, 
                     CASE 
-                        WHEN COALESCE(pll.amount_received, pll.quantity_received) = 0 THEN NULL 
-                        ELSE COALESCE(pll.amount_received, pll.quantity_received)
-                    END quantity_received, 
+                        WHEN pll.amount_received = 0 THEN NULL 
+                        ELSE pll.amount_received
+                    END AS amount_received,
+                    CASE 
+                        WHEN pll.quantity_received = 0 THEN NULL 
+                        ELSE pll.quantity_received
+                    END AS quantity_received,
                     pll.quantity_accepted,
                     pll.quantity_rejected,  
                     CASE 
-                        WHEN COALESCE(pll.amount_billed, pll.quantity_billed) = 0 THEN NULL 
-                        ELSE COALESCE(pll.amount_billed, pll.quantity_billed)
-                    END quantity_billed,
+                        WHEN pll.amount_billed = 0 THEN NULL 
+                        ELSE pll.amount_billed
+                    END AS amount_billed,
+                    CASE 
+                        WHEN pll.quantity_billed = 0 THEN NULL 
+                        ELSE pll.quantity_billed
+                    END AS quantity_billed,
                     pll.quantity_cancelled, 
                     pll.receipt_required_flag,
                     CASE 
