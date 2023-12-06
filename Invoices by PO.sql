@@ -57,17 +57,7 @@ FROM
                         WHEN pll.assessable_value = 0 THEN NULL 
                         ELSE pll.assessable_value
                     END AS assessable_value, 
-                    CASE 
-                        WHEN COALESCE(pll.amount_received, pll.quantity_received) = 0 THEN NULL 
-                        ELSE COALESCE(pll.amount_received, pll.quantity_received)
-                    END quantity_received, 
                     pll.quantity_accepted,
-                    pll.quantity_rejected,  
-                    CASE 
-                        WHEN COALESCE(pll.amount_billed, pll.quantity_billed) = 0 THEN NULL 
-                        ELSE COALESCE(pll.amount_billed, pll.quantity_billed)
-                    END quantity_billed,
-                    pll.quantity_cancelled, 
                     pll.receipt_required_flag,
                     CASE 
                         WHEN  pll.assessable_value IS NULL OR pll.assessable_value <= 1 THEN 'False'
@@ -140,6 +130,9 @@ ORDER BY
     invoices.invoice_num, 
     invoices.invoice_line_number, 
     invoices.period_name
+
+
+---------------------------------FILTERS--------------------------
 
 /* Invoice Period */
 SELECT 
