@@ -17,7 +17,11 @@ SELECT
 	Pos.attribute5 AS Leadership_tier,
 	Pos.attribute8 AS Team_Group,
 	pd.name AS Department, 
-	loc.location_name AS Location, 
+	CASE
+	    WHEN loc.internal_location_code IN ('WLG_L7', 'WLG_L8','WLG_L6', 'WLG_L9') THEN 'Wellington' 
+		WHEN loc.internal_location_code IN ('AKL_L7', 'AKL_APO') THEN 'Auckland' 
+		ELSE loc.Location_name
+	END AS Location,
 	job.name AS Job 
 FROM 
     HR_ALL_POSITIONS_F_VL pos
@@ -35,7 +39,8 @@ SELECT
     a.*, 
 	p.Full_Name,
 	ppl.person_number,   
-	TO_CHAR(pps.date_start, 'DD/MM/YYYY') AS Start_date
+	TO_CHAR(pps.date_start, 'DD/MM/YYYY') AS Start_date, 
+	pea.email_address
 FROM  
 	(SELECT  
 	    aa.person_id,
@@ -57,8 +62,10 @@ FROM
  	INNER JOIN PER_PERSON_NAMES_F p ON p.person_id = a.person_id 
 	INNER JOIN PER_PEOPLE_F ppl ON ppl.person_id = a.person_id
 	INNER JOIN PER_PERIODS_OF_SERVICE pps ON pps.person_id = a.person_id 
+	LEFT JOIN PER_EMAIL_ADDRESSES pea ON pea.person_id = a.person_id
 WHERE 
     p.name_type = 'GLOBAL'
+	AND pea.email_type = 'W1'
     AND :data_as_off BETWEEN p.effective_start_date AND p.effective_end_date
 	AND :data_as_off BETWEEN ppl.effective_start_date AND ppl.effective_end_date
 	AND (
@@ -89,6 +96,7 @@ SELECT
 	Person.Full_Name, 
 	Person.person_id, 
 	Person.assignment_number, 
+	Person.email_address,
 	CASE 
 	    WHEN Person.Employment_Type = 'ACTIVE' THEN 'Active'
 		WHEN Person.Employment_Type = 'SUSPENDED' THEN 'Suspended'
