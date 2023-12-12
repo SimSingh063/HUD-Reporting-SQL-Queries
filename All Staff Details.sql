@@ -156,7 +156,7 @@ FROM
 				   :data_as_off BETWEEN mgrd.effective_start_date AND mgrd.effective_end_date
 				   AND :data_as_off BETWEEN mas.effective_start_date AND mas.effective_end_date
 			  )mgr ON mgr.person_id = Person.person_id AND mgr.assignment_id = Person.assignment_id 
-	LEFT JOIN (SELECT 
+	LEFT JOIN (SELECT DISTINCT    /* Quick Fix for now as it was creating duplicate records for person 4103 */
 	               assigrd.*, 
 				   grstp.name AS Step, 
 				   grstp.grade_id
