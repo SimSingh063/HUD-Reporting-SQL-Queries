@@ -35,8 +35,8 @@ SELECT DISTINCT
 	COALESCE(xal.ae_line_num, gjl.je_line_num) AS journal_line,
 	gl_flexfields_pkg.get_concat_description(gcc.chart_of_accounts_id,gcc.code_combination_id) coa_desc,
 	CASE 
-        WHEN inv.TYP = 'AP Invoice' THEN inv.PO_VENDOR_NAME  
-        WHEN TXN.TYP = 'Invoice Payments' THEN TXN.PO_VENDOR_NAME  
+        WHEN inv.typ = 'AP Invoice' THEN inv.PO_VENDOR_NAME  
+        WHEN txn.typ = 'Invoice Payments' THEN txn.PO_VENDOR_NAME  
         ELSE NULL  
     END AS SupplierName,  
      CASE
@@ -70,6 +70,7 @@ FROM
 	           SELECT DISTINCT
                     'AP_INVOICES' AS Entity_code, 
                     xah.ae_header_id,
+					ael.ae_line_num,
 					aia.invoice_id, 
 					aia.invoice_num, 
 					aia.payment_status_flag AS Payment_status, 
@@ -90,10 +91,10 @@ FROM
 					INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
 					INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
 					INNER JOIN po_distributions_all pda ON aida.po_distribution_id = pda.po_distribution_id  
-					INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id  
+					INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id
 					INNER JOIN po_headers_all pha ON pha.po_header_id = pla.po_header_id 
 					INNER JOIN poz_suppliers_v posv ON aia.vendor_id = posv.vendor_id
-					INNER JOIN xla_distribution_links xdl ON  aida.INVOICE_DISTRIBUTION_ID = xdl.SOURCE_DISTRIBUTION_ID_NUM_1 AND aida.DISTRIBUTION_LINE_NUMBER = xdl.AE_LINE_NUM
+					INNER JOIN xla_distribution_links xdl ON aida.invoice_distribution_id = xdl.source_distribution_id_num_1 AND aida.distribution_line_number = xdl.ae_line_num 
 					INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num
 					INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id
                 WHERE  
@@ -101,7 +102,7 @@ FROM
                     AND aila.line_type_lookup_code = 'ITEM'
                     AND aida.line_type_lookup_code = 'ITEM'
                     AND aila.discarded_flag = 'N'
-                ) inv ON inv.Invoice_id = xte.source_id_int_1 AND inv.appl_id = xte.application_id AND inv.entity_code = xte.entity_code AND inv.ae_header_id = xah.ae_header_id  
+                ) inv ON inv.Invoice_id = xte.source_id_int_1 AND inv.appl_id = xte.application_id AND inv.entity_code = xte.entity_code AND inv.ae_header_id = xah.ae_header_id AND inv.ae_line_num = xal.ae_line_num
     LEFT JOIN (		   
 			   SELECT   
 			       'AP_INVOICES' AS ENTITY_CODE,  
