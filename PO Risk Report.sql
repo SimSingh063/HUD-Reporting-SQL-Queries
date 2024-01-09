@@ -37,7 +37,7 @@ SELECT
     (pol.assessable_value - COALESCE(invoices.Total_invoice_Amt,0)) AS PO_Amount_Left, 
     COALESCE(invoices.Invoice_count,0) AS Invoice_count, 
     invoices.Avg_invoice_Amt AS PO_Avg_Invoice_Amt, 
-    FLOOR((pol.assessable_value - invoices.Total_invoice_Amt)/Avg_invoice_Amt) AS Invoices_Remaining, 
+    FLOOR((pol.assessable_value - invoices.Total_invoice_Amt)/NULLIF(Avg_invoice_Amt,0)) AS Invoices_Remaining, 
     CASE   
         WHEN EXTRACT(MONTH FROM SYSDATE) >= 7 THEN 12 - EXTRACT(MONTH FROM SYSDATE) + 6  
         ELSE 6 - EXTRACT(MONTH FROM SYSDATE)  
