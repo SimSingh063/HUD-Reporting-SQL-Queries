@@ -7,13 +7,17 @@ SELECT DISTINCT
 	gjl.status AS status_type, 
 	COALESCE(xal.gl_sl_link_id, gjl.gl_sl_link_id) AS LinkID,
 	CASE
-	    WHEN gjl.gl_sl_link_id IS NULL THEN COALESCE(xal.entered_dr, gjl.entered_dr, 0)
-		ELSE gjl.entered_dr
-	END -
-	CASE 
-	    WHEN gjl.gl_sl_link_id IS NULL THEN COALESCE(xal.entered_cr, gjl.entered_cr, 0)
-		ELSE gjl.entered_cr
-	END AS Entered_Amount,
+	    WHEN inv.gl_sl_link_id IS NOT NULL THEN inv.Entered_Amount
+		ELSE 
+		    CASE
+	            WHEN gjl.gl_sl_link_id IS NULL THEN COALESCE(xal.entered_dr, gjl.entered_dr, 0)
+		        ELSE gjl.entered_dr
+	        END -
+	        CASE 
+	            WHEN gjl.gl_sl_link_id IS NULL THEN COALESCE(xal.entered_cr, gjl.entered_cr, 0)
+		        ELSE gjl.entered_cr
+	        END 
+		END AS Entered_Amount,
 	gcc.segment1 AS Entity_Type, 
 	gcc.segment2 AS Cost_Centre, 
 	gcc.segment3 AS Natural_Account,
@@ -61,48 +65,86 @@ FROM
 	INNER JOIN GL_CODE_COMBINATIONS gcc ON gcc.code_combination_id = gjl.code_combination_id
 	LEFT JOIN GL_JE_BATCHES gjb ON gjb.je_batch_id = gjh.je_batch_id
 	LEFT JOIN GL_IMPORT_REFERENCES gir ON gir.je_header_id = gjl.je_header_id AND gir.je_line_num = gjl.je_line_num
-	LEFT JOIN XLA_AE_LINES xal ON xal.gl_sl_link_id = COALESCE(gjl.gl_sl_link_id, gir.gl_sl_link_id)
+	LEFT JOIN XLA_AE_LINES xal ON xal.gl_sl_link_id = COALESCE(gjl.gl_sl_link_id, gir.gl_sl_link_id) AND xal.gl_sl_link_table = COALESCE(gjl.gl_sl_link_table, gir.gl_sl_link_table)
 	LEFT JOIN XLA_AE_HEADERS xah ON xah.ae_header_id = xal.ae_header_id
 	LEFT JOIN XLA_TRANSACTION_ENTITIES xte ON xte.entity_id = xah.entity_id
 	LEFT JOIN FND_DOC_SEQUENCE_CATEGORIES fdsc ON fdsc.code = xah.doc_category_code 
 	LEFT JOIN GL_JE_SOURCES_B gjs ON gjs.JE_SOURCE_NAME = gjh.je_source
 	LEFT JOIN (
-	           SELECT DISTINCT
-                    'AP_INVOICES' AS Entity_code, 
-                    xah.ae_header_id,
-					ael.ae_line_num,
-					aia.invoice_id, 
-					aia.invoice_num, 
-					aia.payment_status_flag AS Payment_status, 
-					aia.invoice_currency_code AS Invoice_currency, 
-					aia.invoice_amount, 
-					aia.total_tax_amount AS Tax_amount,
-					pha.segment1 po_number, 
-					posv.vendor_name AS PO_vendor_name, 
-					aia.invoice_date, 
-					aia.created_by, 
-					aia.creation_date, 
-					aia.description AS Hdr,  
-					posv.segment1 AS vendor_num, 
-					200 AS Appl_id, 
-					'AP Invoice' AS Typ  
-				FROM 
-				    ap_invoices_all aia  
-					INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
-					INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
-					INNER JOIN po_distributions_all pda ON aida.po_distribution_id = pda.po_distribution_id  
-					INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id
-					INNER JOIN po_headers_all pha ON pha.po_header_id = pla.po_header_id 
-					INNER JOIN poz_suppliers_v posv ON aia.vendor_id = posv.vendor_id
-					INNER JOIN xla_distribution_links xdl ON aida.invoice_distribution_id = xdl.source_distribution_id_num_1 AND aida.distribution_line_number = xdl.ae_line_num 
-					INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num
-					INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id
-                WHERE  
-					aia.approval_status = 'APPROVED'
-                    AND aila.line_type_lookup_code = 'ITEM'
-                    AND aida.line_type_lookup_code = 'ITEM'
-                    AND aila.discarded_flag = 'N'
-                ) inv ON inv.Invoice_id = xte.source_id_int_1 AND inv.appl_id = xte.application_id AND inv.entity_code = xte.entity_code AND inv.ae_header_id = xah.ae_header_id AND inv.ae_line_num = xal.ae_line_num
+	        WITH inv_rec AS (
+            SELECT
+                xah.ae_header_id,
+                ael.ae_line_num 
+            FROM
+                ap_invoices_all aia
+                INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id
+				INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
+				INNER JOIN po_distributions_all pda ON aida.po_distribution_id = pda.po_distribution_id
+				INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id AND pla.po_line_id = aila.po_line_id
+				INNER JOIN xla_distribution_links xdl ON aida.invoice_distribution_id = xdl.applied_to_dist_id_num_1 AND xdl.applied_to_source_id_num_1 = aia.invoice_id
+				INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num AND ael.ae_header_id = xdl.ae_header_id
+				INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id
+			WHERE
+			    aia.approval_status = 'APPROVED'
+				AND aila.line_type_lookup_code = 'ITEM'
+				AND aida.line_type_lookup_code = 'ITEM'
+				AND aila.discarded_flag = 'N'
+				AND xdl.rounding_class_code = 'ITEM EXPENSE'
+				AND ael.accounting_class_code = 'ITEM EXPENSE'
+				AND xdl.application_id = 200 
+			GROUP BY
+			    xah.ae_header_id,
+				ael.ae_line_num
+			HAVING
+			    COUNT(DISTINCT pla.po_header_id) > 1
+			)
+			SELECT DISTINCT
+			    'AP_INVOICES' AS Entity_code,
+				xah.ae_header_id,
+				ael.gl_sl_link_id,
+				ael.ae_line_num,
+				aia.invoice_id,
+				aia.invoice_num,
+				aila.line_number,
+				aida.distribution_line_number,
+				aia.payment_status_flag AS Payment_status,
+				aia.invoice_currency_code AS Invoice_currency,
+				aia.invoice_amount,
+				CASE
+				    WHEN ir.ae_header_id = xah.ae_header_id AND ir.ae_line_num = ael.ae_line_num THEN (COALESCE(xdl.unrounded_entered_dr,0) - COALESCE(xdl.unrounded_entered_cr,0))
+					ELSE (COALESCE(ael.entered_dr,0) - COALESCE(ael.entered_cr,0))
+				END AS Entered_Amount,
+				aia.total_tax_amount AS Tax_amount,
+				pha.segment1 po_number,
+				posv.vendor_name AS PO_vendor_name,
+				aia.invoice_date,
+				aia.created_by,
+				aia.creation_date,
+				aia.description AS Hdr,
+				posv.segment1 AS vendor_num,
+				200 AS Appl_id,
+				'AP Invoice' AS Typ
+			FROM
+			    ap_invoices_all aia
+				INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id
+				INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
+				INNER JOIN po_distributions_all pda ON aida.po_distribution_id = pda.po_distribution_id
+				INNER JOIN po_lines_all pla ON pla.po_line_id = pda.po_line_id AND pla.po_line_id = aila.po_line_id
+				INNER JOIN po_headers_all pha ON pha.po_header_id = pla.po_header_id
+				INNER JOIN poz_suppliers_v posv ON aia.vendor_id = posv.vendor_id
+				INNER JOIN xla_distribution_links xdl ON aida.invoice_distribution_id = xdl.applied_to_dist_id_num_1 AND xdl.applied_to_source_id_num_1 = aia.invoice_id
+				INNER JOIN xla_ae_lines ael ON ael.ae_line_num = xdl.ae_line_num AND ael.ae_header_id = xdl.ae_header_id
+				INNER JOIN xla_ae_headers xah ON xah.ae_header_id = xdl.ae_header_id 
+				LEFT JOIN inv_rec ir ON ir.ae_header_id = xah.ae_header_id AND ir.ae_line_num = ael.ae_line_num
+			WHERE  
+			    aia.approval_status = 'APPROVED'
+				AND aila.line_type_lookup_code = 'ITEM'
+				AND aida.line_type_lookup_code = 'ITEM'
+				AND aila.discarded_flag = 'N'
+				AND xdl.rounding_class_code = 'ITEM EXPENSE'
+				AND ael.accounting_class_code = 'ITEM EXPENSE'
+				AND xdl.application_id = 200 
+            ) inv ON inv.Invoice_id = xte.source_id_int_1 AND inv.appl_id = xte.application_id AND inv.entity_code = xte.entity_code AND inv.ae_header_id = xah.ae_header_id AND inv.ae_line_num = xal.ae_line_num
     LEFT JOIN (		   
 			   SELECT   
 			       'AP_INVOICES' AS ENTITY_CODE,  
@@ -394,7 +436,7 @@ WHERE
 ORDER BY 
     GL_Date,
 	gjh.name,
-	xte.transaction_number 
+	xte.transaction_number
 
 /* List of Values SQL Query*/
 /* Source */
