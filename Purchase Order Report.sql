@@ -14,19 +14,9 @@ SELECT
     pla.from_header_id, 
     pla.from_line_id,
     pla.contract_id, 
-    pla.line_status, 
-    CASE 
-        WHEN poh.document_status = 'CANCELED' THEN 'Canceled'
-        WHEN poh.document_status = 'CLOSED' THEN 'Closed'
-        WHEN poh.document_status = 'INCOMPLETE' THEN 'Incomplete'
-        WHEN poh.document_status = 'CLOSED FOR INVOICING' THEN 'Closed for Invoicing'
-        WHEN poh.document_status = 'CLOSED FOR RECEIVING' THEN 'Closed for Receiving'
-        WHEN poh.document_status = 'FINALLY CLOSED' THEN 'Finally Closed'
-        WHEN poh.document_status = 'ON HOLD' THEN 'On Hold'
-        WHEN poh.document_status = 'OPEN' THEN 'Open'
-        WHEN poh.document_status = 'PENDING APPROVAL' THEN 'Pending Approval'
-        WHEN poh.document_status = 'WITHDRAWN' THEN 'Withdrawn'
-        END AS document_status, 
+    pla.item_description AS Line_description,  
+    CONCAT(UPPER(SUBSTR(poh.document_status, 1, 1)), LOWER(SUBSTR(poh.document_status, 2))) AS document_status,
+    CONCAT(UPPER(SUBSTR(pla.line_status, 1, 1)), LOWER(SUBSTR(pla.line_status, 2))) AS PO_line_status,
     poh.currency_code, 
     pol.assessable_value, 
     COALESCE(pol.amount_received,pol.quantity_received) AS quantity_received,
@@ -45,6 +35,7 @@ SELECT
     pz.segment1 AS Supplier_num,  
     TO_CHAR(poh.creation_date, 'dd-MM-yyyy') AS Creation_Date,
     TO_CHAR(poh.creation_date, 'MONTH-YY') AS PO_Start_Period,
+    TO_CHAR(pol.need_by_date, 'dd-MM-yyyy') AS PO_Need_by_Date,
     TRIM(poh.comments) AS Comments, 
     contracts.contract_number, 
     contracts.contract_version, 
@@ -66,6 +57,7 @@ FROM
                     pll.po_header_id, 
                     pll.po_line_id, 
                     pll.line_location_id, 
+                    pll.need_by_date,
                     CASE 
                         WHEN pll.assessable_value = 0 THEN NULL 
                         ELSE pll.assessable_value
