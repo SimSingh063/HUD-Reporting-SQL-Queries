@@ -26,6 +26,7 @@ SELECT
     pol.quantity_cancelled, 
     pol.receipt_required_flag, 
     pol.POValue,
+    pol.input_tax_classification_code, 
     gcc.segment2 || '-' || gcc.segment3 || '-' || gcc.segment4 AS Cost_Codes,
     ffv.description, 
     ppn.display_name AS full_name, 
@@ -58,6 +59,7 @@ FROM
                     pll.po_line_id, 
                     pll.line_location_id, 
                     pll.need_by_date,
+                    pll.input_tax_classification_code, 
                     CASE 
                         WHEN pll.assessable_value = 0 THEN NULL 
                         ELSE pll.assessable_value
