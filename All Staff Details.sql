@@ -182,16 +182,19 @@ FROM
 				    Fteval.unit = 'FTE'
 					AND :data_as_off BETWEEN fteval.effective_start_date AND fteval.effective_end_date 
               ) Fte ON fte.assignment_id = person.assignment_id	
-	LEFT JOIN (SELECT 
-	               DISTINCT Person_ID, 
-	               Assignment_ID,
-                   Annual_Ft_Salary, 
-	               FTE_Value, 
-	               Grade_ID, 
-	               Salary_Amount
-               FROM 
-                   cmp_salary cs
-               WHERE 
-                   assignment_type = 'E' /*Only looking for Salary for Permanent or Fixed Term Employees. Contractors and Consultants dont have a salary*/
-	               AND :data_as_off BETWEEN cs.date_from AND cs.date_to
-			   ) Sal ON Sal.person_id = Person.person_id AND Sal.Assignment_ID = Person.Assignment_ID AND Sal.Grade_ID = Person.Grade_ID
+    LEFT JOIN (SELECT
+                   csa.salary_amount,
+                   csa.Annual_Ft_Salary,
+				   csa.person_id, 
+				   csa.assignment_id,
+				   csa.FTE_Value,
+				   asg.grade_id 
+			   FROM
+			       cmp_salary csa
+				   INNER JOIN per_all_assignments_m asg ON asg.assignment_id = csa.assignment_id
+			   WHERE 
+				   asg.effective_latest_change = 'Y'
+				   AND asg.assignment_type = 'E' /*Only looking for Salary for Permanent or Fixed Term Employees. Contractors and Consultants dont have a salary*/
+                   AND csa.date_from BETWEEN asg.effective_start_date AND asg.effective_end_date
+				   AND sysdate BETWEEN csa.date_from AND csa.date_to
+	           ) Sal ON Sal.person_id = Person.person_id AND Sal.Assignment_ID = Person.Assignment_ID AND Sal.Grade_ID = Person.Grade_ID
