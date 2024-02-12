@@ -283,13 +283,13 @@ WHERE
     AND (COALESCE(NULL, :Category_Code) IS NULL OR COALESCE(cc.category_id, c.category_id) IN (:Category_Code))
     AND (COALESCE(NULL, :Business_Unit) IS NULL OR header.BusinessUnit IN (:Business_Unit))
     AND (COALESCE(NULL, :SupplierNum) IS NULL OR header.Supplier_Num IN (:SupplierNum))
-    AND (COALESCE(NULL, :OriginatorRole) IS NULL OR COALESCE(cop.Initiator_Name, 'System') IN (:OriginatorRole))
+    AND (COALESCE(NULL, :OriginatorRole) IS NULL OR CASE WHEN header.originator_role = 'SYSTEM' THEN 'System' ELSE cop.Initiator_Name END IN (:OriginatorRole))
 ORDER BY 
     header.po_number, 
     header.co_num, 
     line.line_num
 
-
+--------------------------------------------------------FILTERS------------------------------------------------------------------------------------------------------------------------------------------
 
 /* Cost Centre */
 SELECT 
@@ -317,7 +317,6 @@ WHERE
 ORDER BY 
     poh.segment1
 
-
 /* Supplier */
 SELECT 
     DISTINCT hp.party_name AS SupplierName,
@@ -331,8 +330,6 @@ WHERE
     (COALESCE(NULL, :Business_Unit) IS NULL OR hou.name  IN (:Business_Unit))
 ORDER BY 
     hp.party_name
-
-
 
 /* Cost Centre Group */
 SELECT 
@@ -363,13 +360,21 @@ ORDER BY
 
 /* Change Initiator Name */
 SELECT 
-    DISTINCT ppn.display_name AS Initiator_Name, 
-    pv.originator_id
-FROM 
-    po_versions pv
-    INNER JOIN per_person_names_f ppn ON ppn.person_id =pv.originator_id
-WHERE 
-    ppn.name_type = 'GLOBAL'
-    AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
+    DISTINCT Initiator_Name  
+FROM (  
+    SELECT   
+        ppn.display_name AS Initiator_Name  
+    FROM   
+        po_versions pv  
+        INNER JOIN per_person_names_f ppn ON ppn.person_id = pv.originator_id  
+    WHERE   
+        ppn.name_type = 'GLOBAL'  
+        AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date  
+    UNION ALL  
+    SELECT  
+        'System' AS Initiator_Name  
+    FROM  
+        DUAL  
+) Initiator  
 ORDER BY 
-    ppn.display_name
+    Initiator_Name  
