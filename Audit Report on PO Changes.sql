@@ -84,6 +84,18 @@ SELECT
     line_dist.Requester, 
     gcc.segment1 AS Entity, 
     gcc.segment2 AS Cost_Centre, 
+    CASE 
+        WHEN gcc.segment2 = 115 THEN 'Chief Executive'
+        WHEN gcc.segment2 = 999 THEN 'Suspense Account'
+        WHEN gcc.segment2 = 991 THEN 'Multiple'
+        WHEN gcc.segment2 = 810 THEN 'Place'
+        WHEN gcc.segment2 IN (901,911,215,216,217,218,219,235,821,238,861,871,246,247,249) THEN 'Intelligence and System Direction'
+        WHEN gcc.segment2 IN (401,405,406,341,261,409,361,426,427,431,432,441,331) THEN 'System Delivery and Performance'
+        WHEN gcc.segment2 IN (501,511,515,541,531,525,521,551) THEN 'Tumuaki Te Tāhui'
+        WHEN gcc.segment2 IN (601,621,711,631,941,721,641,661,611,615) THEN 'Organisational Performance'
+        WHEN gcc.segment2 IN (701,651,681,741) THEN 'Office of Chief Executive'
+        WHEN gcc.segment2 IN (301,231,241,841,221,851,305,351,827,835,836,931) THEN 'Solutions Design and Implementation'
+    END AS Cost_Centre_Group,
     gcc.segment3 AS Natural_Account, 
     gcc.segment4 AS Activity, 
     gcc.segment5 AS Future, 
@@ -187,6 +199,10 @@ SELECT
         WHEN ((pa.headerstatus IS NULL AND pl.line_status IS NULL) OR (pa.headerstatus IS NOT NULL AND pl.line_status IS NULL)) THEN COALESCE(pl.cost_centre, LAG(pl.cost_centre, 1) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre, 2) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre, 3) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre, 4) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre, 5) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre, 6) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre, 7) OVER (ORDER BY pa.po_header_id, pa.co_num))
         ELSE pl.cost_centre 
     END AS cost_centre,
+        CASE 
+        WHEN ((pa.headerstatus IS NULL AND pl.line_status IS NULL) OR (pa.headerstatus IS NOT NULL AND pl.line_status IS NULL)) THEN COALESCE(pl.cost_centre_group, LAG(pl.cost_centre_group, 1) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre_group, 2) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre_group, 3) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre_group, 4) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.cost_centre_group, 5) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre_group, 6) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.cost_centre_group, 7) OVER (ORDER BY pa.po_header_id, pa.co_num))
+        ELSE pl.cost_centre_group 
+    END AS cost_centre_group,
     CASE 
         WHEN ((pa.headerstatus IS NULL AND pl.line_status IS NULL) OR (pa.headerstatus IS NOT NULL AND pl.line_status IS NULL)) THEN COALESCE(pl.activity, LAG(pl.activity, 1) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.activity, 2) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.activity, 3) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.activity, 4) OVER (ORDER BY pa.po_header_id, pa.co_num),LAG(pl.activity, 5) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.activity, 6) OVER (ORDER BY pa.po_header_id, pa.co_num), LAG(pl.activity, 7) OVER (ORDER BY pa.po_header_id, pa.co_num))
         ELSE pl.activity 
@@ -248,6 +264,7 @@ SELECT
     line.code_combination_id, 
     COALESCE(cc.entity, c.entity) AS Entity, 
     COALESCE(cc.Cost_Centre, c.cost_centre) AS Cost_Centre, 
+    COALESCE(cc.Cost_Centre_Group, c.cost_centre_group) AS Cost_Centre_Group, 
     COALESCE(cc.natural_account, c.natural_account) AS Natural_Account, 
     COALESCE(cc.activity, c.activity) AS Activity, 
     COALESCE(cc.future, c.future) AS Future, 
@@ -260,11 +277,13 @@ FROM
     LEFT JOIN Category_Code c ON c.po_header_id = header.po_header_id AND c.version_id = header.version_id AND c.co_num = header.co_num AND c.line_status IS NULL
     LEFT JOIN Changer_order_person cop ON cop.originator_id = header.originator_id
 WHERE 
-    (COALESCE(NULL, :PO_Number) IS NULL OR header.po_number IN (:PO_Number))
+    (COALESCE(NULL, :PO_Num) IS NULL OR header.po_number IN (:PO_Num))
     AND (COALESCE(NULL, :CostCentre) IS NULL OR COALESCE(cc.Cost_Centre, c.cost_centre) IN (:CostCentre))
+    AND (COALESCE(NULL, :CostCentreGroup) IS NULL OR COALESCE(cc.Cost_Centre_Group, c.cost_centre_group) IN (:CostCentreGroup))
     AND (COALESCE(NULL, :Category_Code) IS NULL OR COALESCE(cc.category_id, c.category_id) IN (:Category_Code))
     AND (COALESCE(NULL, :Business_Unit) IS NULL OR header.BusinessUnit IN (:Business_Unit))
     AND (COALESCE(NULL, :SupplierNum) IS NULL OR header.Supplier_Num IN (:SupplierNum))
+    AND (COALESCE(NULL, :OriginatorRole) IS NULL OR COALESCE(cop.Initiator_Name, 'System') IN (:OriginatorRole))
 ORDER BY 
     header.po_number, 
     header.co_num, 
@@ -286,7 +305,7 @@ ORDER BY
 
 /* PO Number */
 SELECT 
-    DISTINCT poh.segment1 AS PO_Number
+    DISTINCT poh.segment1
 FROM 
 PO_HEADERS_ALL poh 
     INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
@@ -312,3 +331,45 @@ WHERE
     (COALESCE(NULL, :Business_Unit) IS NULL OR hou.name  IN (:Business_Unit))
 ORDER BY 
     hp.party_name
+
+
+
+/* Cost Centre Group */
+SELECT 
+    DISTINCT ccg.Cost_Centre_Group
+FROM (
+    SELECT 
+        CASE 
+            WHEN gcc.segment2 = 115 THEN 'Chief Executive'
+            WHEN gcc.segment2 = 999 THEN 'Suspense Account'
+            WHEN gcc.segment2 = 991 THEN 'Multiple'
+            WHEN gcc.segment2 = 810 THEN 'Place'
+            WHEN gcc.segment2 IN (901,911,215,216,217,218,219,235,821,238,861,871,246,247,249) THEN 'Intelligence and System Direction'
+            WHEN gcc.segment2 IN (401,405,406,341,261,409,361,426,427,431,432,441,331) THEN 'System Delivery and Performance'
+            WHEN gcc.segment2 IN (501,511,515,541,531,525,521,551) THEN 'Tumuaki Te Tāhui'
+            WHEN gcc.segment2 IN (601,621,711,631,941,721,641,661,611,615) THEN 'Organisational Performance'
+            WHEN gcc.segment2 IN (701,651,681,741) THEN 'Office of Chief Executive'
+            WHEN gcc.segment2 IN (301,231,241,841,221,851,305,351,827,835,836,931) THEN 'Solutions Design and Implementation'
+        END AS Cost_Centre_Group 
+    FROM 
+        PO_HEADERS_ALL poh 
+        INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
+        INNER JOIN PO_LINE_LOCATIONS_ALL pol ON poh.po_header_id = pol.po_header_id AND pol.po_line_id = pla.po_line_id 
+        INNER JOIN PO_DISTRIBUTIONS_ALL pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pol.line_location_id 
+        INNER JOIN GL_CODE_COMBINATIONS gcc ON gcc.code_combination_id = pod.code_combination_id
+    )ccg
+ORDER BY 
+    ccg.Cost_Centre_Group
+
+/* Change Initiator Name */
+SELECT 
+    DISTINCT ppn.display_name AS Initiator_Name, 
+    pv.originator_id
+FROM 
+    po_versions pv
+    INNER JOIN per_person_names_f ppn ON ppn.person_id =pv.originator_id
+WHERE 
+    ppn.name_type = 'GLOBAL'
+    AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
+ORDER BY 
+    ppn.display_name
