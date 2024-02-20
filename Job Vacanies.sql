@@ -214,3 +214,34 @@ ORDER BY
         ELSE 'Occupied'
     END,
     position.position_code
+
+/*---------------------------------FILTERS--------------------------------*/
+
+/* Candidate Phase */    
+SELECT 
+    DISTINCT name
+FROM 
+    irc_phases_vl
+WHERE 
+    type_code = 'CSW'
+ORDER BY 
+    name
+
+/* Requisition Phase */
+SELECT 
+    DISTINCT name
+FROM 
+    irc_phases_vl
+WHERE 
+    type_code = 'REQUISITION'
+ORDER BY 
+    name
+
+/* Team Group */
+SELECT 
+    DISTINCT Pos.attribute8 
+FROM 
+    HR_ALL_POSITIONS_F_VL pos 
+ORDER BY 
+    pos.attribute8
+
