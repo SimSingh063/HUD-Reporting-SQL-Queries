@@ -1,7 +1,7 @@
 /* 
 Title - AP Invoice Entry Report
 Author - Simranjeet Singh
-Date - 27/02/2024
+Date - 27/02/2024   
 Department - Finance 
 Description - Report showcasing details about who created and approved the invoices alongside their respective Purchase Orders, if any. 
 */
@@ -59,16 +59,18 @@ FROM
                         aprvl.invoice_id,   
                         MAX(aprvl.action_date) AS action_date, 
                         CASE   
+                            WHEN aprvl.response = 'ORA_AUTO APPROVED' THEN 'Auto Approved'
                             WHEN aprvl.approver_id = 'Batch.Scheduler' THEN 'Batch Scheduler'  
                             WHEN aprvl.approver_id = 'ORA_WORKFLOW SYSTEM' THEN 'Workflow System'  
                             ELSE UPPER(SUBSTR(SUBSTR(aprvl.approver_id, 1, INSTR(aprvl.approver_id, '.') - 1), 1, 1)) ||  LOWER(SUBSTR(SUBSTR(aprvl.approver_id, 1, INSTR(aprvl.approver_id, '.') - 1), 2)) || ' ' ||   
                                 UPPER(SUBSTR(SUBSTR(aprvl.approver_id, INSTR(aprvl.approver_id, '.') + 1, INSTR(aprvl.approver_id, '@') - INSTR(aprvl.approver_id, '.') - 1), 1, 1)) ||  LOWER(SUBSTR(SUBSTR(aprvl.approver_id, INSTR(aprvl.approver_id, '.') + 1, INSTR(aprvl.approver_id, '@') - INSTR(aprvl.approver_id, '.') - 1), 2))   
-                            END AS approved_by  
+                        END AS approved_by  
                     FROM (
                         SELECT 
                             a.invoice_id, 
                             TO_CHAR(a.action_date,'dd-MM-yyyy') AS action_date,
-                            a.approver_id
+                            a.approver_id,
+                            a.response
                         FROM
                             ap_inv_aprvl_hist_all a
                         WHERE 
@@ -79,7 +81,8 @@ FROM
                         ) aprvl  
                     GROUP BY
                         aprvl.invoice_id, 
-                        CASE   
+                        CASE 
+                            WHEN aprvl.response = 'ORA_AUTO APPROVED' THEN 'Auto Approved'  
                             WHEN aprvl.approver_id = 'Batch.Scheduler' THEN 'Batch Scheduler'  
                             WHEN aprvl.approver_id = 'ORA_WORKFLOW SYSTEM' THEN 'Workflow System'  
                             ELSE  UPPER(SUBSTR(SUBSTR(aprvl.approver_id, 1, INSTR(aprvl.approver_id, '.') - 1), 1, 1)) ||  LOWER(SUBSTR(SUBSTR(aprvl.approver_id, 1, INSTR(aprvl.approver_id, '.') - 1), 2)) || ' ' ||   
@@ -165,14 +168,14 @@ SELECT DISTINCT
     po_num.PO_6,
     ROW_NUMBER() OVER (ORDER BY invoices.invoice_id) + 999 AS unique_row_number,
     CASE
-        WHEN (invoices.invoice_amount >= 100000 AND invoices.approver_1 = 'Batch Scheduler' AND invoices.approver_2 IS NULL AND invoices.approver_3 IS NULL) THEN 'ERROR'
+        WHEN (invoices.invoice_amount >= 100000 AND invoices.approver_1 = 'Auto Approved' AND invoices.approver_2 IS NULL AND invoices.approver_3 IS NULL) THEN 'ERROR'
         ELSE NULL 
     END AS rule_error1, 
     CASE
         WHEN invoices.invoice_amount >= 100000 THEN NULL 
         WHEN invoices.invoice_amount < 100000 AND invoices.created_by <> 'Batch Scheduler' THEN NULL
         WHEN invoices.invoice_amount < 100000 AND invoices.approver_1 = 'Not Required' THEN NULL
-        WHEN invoices.invoice_amount < 100000 AND invoices.created_by = 'Batch Scheduler' AND invoices.approver_1 = 'Batch Scheduler' AND invoices.approver_2 IS NULL AND invoices.approver_3 IS NULL THEN NULL 
+        WHEN invoices.invoice_amount < 100000 AND invoices.created_by = 'Batch Scheduler' AND invoices.approver_1 = 'Auto Approved' AND invoices.approver_2 IS NULL AND invoices.approver_3 IS NULL THEN NULL 
         ELSE 'Intervention'
     END rule_error2
 FROM 
