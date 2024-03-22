@@ -1,3 +1,10 @@
+/* 
+Title - Employee Terminations
+Author - Simranjeet Singh
+Date - 20/03/2024
+Description - Details of all terminated staff members 
+*/
+
 WITH Person AS (
 SELECT
 	p.person_id,
@@ -16,7 +23,8 @@ SELECT
 	aa.assignment_status_type, 
     aa.action_code, 
     pas.manager_id, 
-    pas.manager_assignment_id
+    pas.manager_assignment_id, 
+    gr.grade_code AS Band
 FROM
     PER_PERSON_NAMES_F p
 	INNER JOIN PER_PEOPLE_F ppl ON ppl.person_id = p.person_id
@@ -25,6 +33,7 @@ FROM
     LEFT JOIN PER_ACTION_REASONS_VL par ON pao.action_reason_id = par.action_reason_id
     INNER JOIN PER_ALL_ASSIGNMENTS_M aa ON aa.person_id = p.person_id 
     INNER JOIN PER_ASSIGNMENT_SUPERVISORS_F_V pas ON pas.person_id = p.person_id AND pas.assignment_id = aa.assignment_id
+    LEFT JOIN PER_GRADES_F_VL gr ON gr.grade_id = aa.grade_id
 WHERE
     p.name_type = 'GLOBAL'
     AND pps.period_of_service_id = (
@@ -65,7 +74,7 @@ SELECT
 	    WHEN loc.internal_location_code IN ('WLG_L7', 'WLG_L8','WLG_L6', 'WLG_L9') THEN 'Wellington' 
 		WHEN loc.internal_location_code IN ('AKL_L7', 'AKL_APO') THEN 'Auckland' 
 		ELSE loc.Location_name
-	END AS LOCATION,
+	END AS Location,
 	job.name AS Job 
 FROM 
     HR_ALL_POSITIONS_F_VL pos
@@ -93,6 +102,8 @@ SELECT
     Person.person_number,  
     TO_CHAR(Person.date_start, 'dd-MM-yyyy') AS Start_date, 
     TO_CHAR(Person.actual_termination_date, 'dd-MM-yyyy') AS Termination_Date, 
+    TRUNC(MONTHS_BETWEEN(NVL(Person.actual_termination_date, SYSDATE), Person.date_start) / 12) || ' Years ' ||   
+    TRUNC(MOD(MONTHS_BETWEEN(NVL(Person.actual_termination_date, SYSDATE), Person.date_start), 12)) || ' Months ' AS Tenure,
     Person.action_reason AS Termination_Reason,
     Person.assignment_id, 
     Person.assignment_number, 
@@ -102,6 +113,7 @@ SELECT
     Person.primary_flag, 
     Person.assignment_status_type, 
     Person.action_code, 
+    Person.band,
     Position.position_code, 
     Position.name, 
     Position.full_part_time, 
@@ -117,7 +129,8 @@ SELECT
     Mgr.Manager_Number, 
     Mgr_pos.Manager_position_code,
     Mgr_Pos.Manager_position_Name, 
-    ac.Assignment_Category
+    ac.Assignment_Category, 
+    step.step
 FROM 
     Person 
     INNER JOIN Position ON Person.position_id = Position.position_id
@@ -164,6 +177,38 @@ FROM
                                          )
                     AND paa.assignment_type IN ('E','C')
                 ) Mgr_Pos ON Mgr_pos.assignment_id = person.manager_assignment_id
+    	LEFT JOIN (SELECT DISTINCT    /* Quick Fix for now as it was creating duplicate records for person 4103 */
+	               assigrd.*, 
+				   grstp.name AS Step, 
+				   grstp.grade_id
+               FROM(			   
+	                SELECT 
+	                    asgrd.assignment_id, 
+                        asgrd.grade_step_id, 
+                        asgrd.effective_start_date AS asgrd_start_date,
+                        asgrd.effective_end_date AS asgrd_end_date, 
+                        (SELECT 
+                            person.actual_termination_date
+                        FROM 
+                            person
+                        WHERE 
+                            person.assignment_id = asgrd.assignment_id
+                        ) AS Termination_Date
+			        FROM 
+			            PER_ASSIGN_GRADE_STEPS_F asgrd
+			        WHERE 
+                        asgrd.assignment_id IN (
+                                                SELECT
+                                                    DISTINCT person.assignment_id
+                                                FROM 
+                                                    Person
+                                                )
+			       ) assigrd /* Managers do not follow a step model. Using this to get step information for Employees only */
+				   LEFT JOIN PER_GRADE_STEPS_F_VL grstp ON grstp.grade_step_id = assigrd.grade_step_id
+                WHERE
+                    assigrd.termination_date BETWEEN assigrd.asgrd_start_date AND assigrd.asgrd_end_date
+                    AND assigrd.termination_date BETWEEN grstp.effective_start_date AND grstp.effective_end_date 
+			  )Step ON Step.assignment_id = person.assignment_id AND Step.grade_id = Person.grade_id
 WHERE 
     person.actual_termination_date BETWEEN position.pos_start_date AND position.pos_end_date
     AND person.actual_termination_date BETWEEN position.dp_start_date AND position.dp_end_date
@@ -171,5 +216,22 @@ WHERE
     AND person.actual_termination_date BETWEEN Mgr.per_start_date AND Mgr.per_end_date
     AND person.actual_termination_date BETWEEN Mgr_pos.assignment_start_date AND Mgr_pos.assignment_end_date
     AND person.actual_termination_date BETWEEN Mgr_pos.pos_start_date AND Mgr_pos.pos_end_date
+    AND (COALESCE(NULL, :AssignmentCategory) IS NULL OR ac.Assignment_Category IN (:AssignmentCategory))
+    AND (COALESCE(NULL, :TeamGroup) IS NULL OR position.Team_Group IN (:TeamGroup))
 ORDER BY 
     person.actual_termination_date
+
+/*------------------------------------------------FILTER--------------------------------------------------*/
+
+SELECT 
+    DISTINCT hcm.meaning 
+FROM 
+    PER_ALL_ASSIGNMENTS_M aa
+    INNER JOIN PER_PERIODS_OF_SERVICE pps ON pps.person_id = aa.person_id
+    INNER JOIN HCM_LOOKUPS hcm ON hcm.lookup_code = aa.Employment_Category
+WHERE 
+    pps.actual_termination_date < TRUNC(SYSDATE)
+
+
+
+
