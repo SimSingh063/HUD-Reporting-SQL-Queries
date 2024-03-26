@@ -25,11 +25,13 @@ FROM (
         aha.line_location_id,
         hp.party_name AS Supplier_Name, 
         pz.segment1 AS Supplier_num,  
-        hou.name AS Business_Unit
+        hou.name AS Business_Unit, 
+        zn.note_txt AS Note
     FROM    
         ap_invoices_all aia    
         INNER JOIN ap_holds_all aha ON aha.invoice_id = aia.invoice_id    
         INNER JOIN ap_lookup_codes alc ON alc.lookup_code = aha.hold_lookup_code 
+        LEFT JOIN zmm_notes zn ON zn.source_object_uid = aia.invoice_id 
         INNER JOIN poz_suppliers pz ON aia.vendor_id = pz.vendor_id
         INNER JOIN hz_parties hp ON pz.party_id = hp.party_id 
         INNER JOIN hr_organization_units_f_tl hou ON hou.organization_id = aia.org_id
