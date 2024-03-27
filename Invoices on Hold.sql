@@ -47,6 +47,7 @@ FROM (
 WHERE 
     inv_hold.invoice_amount <> 0
     AND ppn.name_type = 'GLOBAL'
+    AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
     AND (COALESCE(NULL, :HoldReason) IS NULL OR inv_hold.displayed_field IN (:HoldReason))
     AND (COALESCE(NULL, :BusinessUnit) IS NULL OR inv_hold.Business_Unit IN (:BusinessUnit))
 
