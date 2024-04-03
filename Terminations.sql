@@ -10,8 +10,10 @@ SELECT
 	p.person_id,
     p.Full_Name,
 	ppl.person_number,   
-    pps.date_start,      
-    pps.actual_termination_date,
+    pps.date_start,     
+    pps.actual_termination_date,  
+    MONTHS_BETWEEN(pps.actual_termination_date, pps.date_start) AS total_months,  
+    EXTRACT(DAY FROM pps.actual_termination_date) AS termination_day,
     par.action_reason, 
     aa.assignment_number,
 	aa.assignment_id,
@@ -24,7 +26,11 @@ SELECT
     aa.action_code, 
     pas.manager_id, 
     pas.manager_assignment_id, 
-    gr.grade_code AS Band
+    gr.grade_code AS Band, 
+    CASE 
+        WHEN pps.actual_termination_date >= TRUNC(SYSDATE) THEN 'Upcoming Terminations'
+        ELSE 'Terminated'
+    END AS Termination_Status
 FROM
     PER_PERSON_NAMES_F p
 	INNER JOIN PER_PEOPLE_F ppl ON ppl.person_id = p.person_id
@@ -44,7 +50,6 @@ WHERE
                                     WHERE 
                                         ppof.person_id = p.person_id
                                     )
-    AND pps.actual_termination_date < TRUNC(SYSDATE)
     AND TRUNC(SYSDATE) BETWEEN ppl.effective_start_date AND ppl.effective_end_date
     AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
     AND aa.assignment_type IN ('E','C') 
@@ -94,6 +99,21 @@ FROM
     INNER JOIN HCM_LOOKUPS hcm ON hcm.lookup_code = pr.Employment_Category
 WHERE 
     hcm.lookup_type = 'EMP_CAT'
+), 
+
+Termination AS (
+SELECT 
+    person.person_id,
+    person.assignment_id, 
+    TO_CHAR(person.actual_termination_date,'dd-MM-yyyy') AS actual_termination_date, 
+    person.termination_day, 
+    TO_CHAR(person.date_start, 'dd-MM-yyyy') AS date_start, 
+    TO_CHAR(CASE 
+        WHEN termination_day >= 15 THEN ADD_MONTHS(person.actual_termination_date, 1)
+        ELSE actual_termination_date
+    END, 'dd-MM-yyyy') adjusted_termination_date
+FROM 
+    person 
 )
 
 SELECT 
@@ -102,9 +122,10 @@ SELECT
     Person.person_number,  
     TO_CHAR(Person.date_start, 'dd-MM-yyyy') AS Start_date, 
     TO_CHAR(Person.actual_termination_date, 'dd-MM-yyyy') AS Termination_Date, 
-    TRUNC(MONTHS_BETWEEN(NVL(Person.actual_termination_date, SYSDATE), Person.date_start) / 12) || ' Years ' ||   
-    TRUNC(MOD(MONTHS_BETWEEN(NVL(Person.actual_termination_date, SYSDATE), Person.date_start), 12)) || ' Months ' AS Tenure,
+    TRUNC(MONTHS_BETWEEN(TO_DATE(t.adjusted_termination_date,'dd-MM-yyyy'), To_DATE(t.date_start,'dd-MM-yyyy')) / 12) || ' Years ' || FLOOR(MOD(MONTHS_BETWEEN(TO_DATE(t.adjusted_termination_date,'dd-MM-yyyy'), To_DATE(t.date_start,'dd-MM-yyyy')), 12)) || ' Months ' AS Tenure,  
+    TRUNC(MONTHS_BETWEEN(TO_DATE(t.adjusted_termination_date,'dd-MM-yyyy'), To_DATE(t.date_start,'dd-MM-yyyy'))) AS Tenure_Months,  
     Person.action_reason AS Termination_Reason,
+    Person.Termination_Status,
     Person.assignment_id, 
     Person.assignment_number, 
     Person.assignment_name, 
@@ -135,6 +156,7 @@ FROM
     Person 
     INNER JOIN Position ON Person.position_id = Position.position_id
     INNER JOIN AssignmentCategory ac ON ac.person_id = person.person_id AND ac.assignment_id = person.assignment_id AND ac.position_id = position.position_id
+    INNER JOIN Termination t ON t.person_id = person.person_id AND t.assignment_id = person.assignment_id
     INNER JOIN (SELECT
                     ppn.person_id, 
                     ppn.full_name AS Manager_Name, 
@@ -218,6 +240,7 @@ WHERE
     AND person.actual_termination_date BETWEEN Mgr_pos.pos_start_date AND Mgr_pos.pos_end_date
     AND (COALESCE(NULL, :AssignmentCategory) IS NULL OR ac.Assignment_Category IN (:AssignmentCategory))
     AND (COALESCE(NULL, :TeamGroup) IS NULL OR position.Team_Group IN (:TeamGroup))
+    AND (COALESCE(NULL, :Term_Status) IS NULL OR person.Termination_Status IN (:Term_Status))
 ORDER BY 
     person.actual_termination_date
 
