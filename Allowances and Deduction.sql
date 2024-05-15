@@ -55,7 +55,13 @@ Assignment AS (
 SELECT 
     assig.*, 
 	ppn.Full_Name,
-	ppf.person_number
+	ppf.person_number, 
+    TO_CHAR(pps.actual_termination_date, 'dd-MM-yyyy') AS Termination_date,
+    CASE 
+        WHEN pps.actual_termination_date IS NULL THEN NULL
+        WHEN pps.actual_termination_date > TRUNC(SYSDATE) THEN 'UT'
+        ELSE 'Y'
+    END Terminated
 FROM (
     SELECT 
         paa.assignment_id, 
@@ -76,14 +82,15 @@ FROM (
                             )
         AND paa.assignment_type = 'E' 
 	    AND paa.effective_latest_change = 'Y'
-	    AND paa.assignment_status_type in ('ACTIVE','SUSPENDED')
         AND TRUNC(SYSDATE) BETWEEN paa.effective_start_date AND paa.effective_end_date
         AND TRUNC(SYSDATE) BETWEEN pas.effective_start_date AND pas.effective_end_date
     ) assig
     INNER JOIN per_person_names_f ppn ON ppn.person_id = assig.person_id 
 	INNER JOIN per_people_f ppf ON ppf.person_id = assig.person_id
+    INNER JOIN per_periods_of_service pps ON pps.person_id = assig.person_id 
 WHERE 
     ppn.name_type = 'GLOBAL'
+    AND pps.Period_type = 'E'
     AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
 	AND TRUNC(SYSDATE) BETWEEN ppf.effective_start_date AND ppf.effective_end_date
 ), 
@@ -154,6 +161,8 @@ SELECT
     a.full_name,
     a.person_number, 
     a.person_id, 
+    a.termination_date, 
+    a.terminated,
     p.position_id, 
     p.position_code, 
     p.name AS position_name, 
