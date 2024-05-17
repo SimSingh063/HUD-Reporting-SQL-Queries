@@ -61,18 +61,17 @@ SELECT
         WHEN pps.actual_termination_date IS NULL THEN NULL
         WHEN pps.actual_termination_date > TRUNC(SYSDATE) THEN 'UT'
         ELSE 'Y'
-    END Terminated
+    END Terminated, 
+    pas.manager_id, 
+    pas.manager_assignment_id
 FROM (
     SELECT 
         paa.assignment_id, 
         paa.assignment_name,
         paa.position_id, 
-        paa.person_id, 
-        pas.manager_id, 
-        pas.manager_assignment_id
+        paa.person_id
     FROM 
-        per_all_assignments_m paa
-        INNER JOIN per_assignment_supervisors_f_v pas ON pas.person_id = paa.person_id AND pas.assignment_id = paa.assignment_id
+        per_all_assignments_m paa    
     WHERE 
         paa.assignment_id IN (
                             SELECT 
@@ -82,17 +81,22 @@ FROM (
                             )
         AND paa.assignment_type = 'E' 
 	    AND paa.effective_latest_change = 'Y'
-        AND TRUNC(SYSDATE) BETWEEN paa.effective_start_date AND paa.effective_end_date
-        AND TRUNC(SYSDATE) BETWEEN pas.effective_start_date AND pas.effective_end_date
+        AND TRUNC(SYSDATE) BETWEEN paa.effective_start_date AND paa.effective_end_date 
     ) assig
     INNER JOIN per_person_names_f ppn ON ppn.person_id = assig.person_id 
 	INNER JOIN per_people_f ppf ON ppf.person_id = assig.person_id
     INNER JOIN per_periods_of_service pps ON pps.person_id = assig.person_id 
+    INNER JOIN per_assignment_supervisors_f_v pas ON pas.person_id = assig.person_id AND pas.assignment_id = assig.assignment_id AND pas.person_id = ppn.person_id
 WHERE 
     ppn.name_type = 'GLOBAL'
     AND pps.Period_type = 'E'
     AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
 	AND TRUNC(SYSDATE) BETWEEN ppf.effective_start_date AND ppf.effective_end_date
+    AND (  
+        (pps.actual_termination_date IS NULL AND TRUNC(SYSDATE) BETWEEN pas.effective_start_date AND pas.effective_end_date)  
+        OR  
+        (pps.actual_termination_date IS NOT NULL AND pps.actual_termination_date BETWEEN pas.effective_start_date AND pas.effective_end_date)  
+        )
 ), 
 
 Position AS (
@@ -220,4 +224,30 @@ FROM
                     AND TRUNC(SYSDATE) BETWEEN hap.effective_start_date AND hap.effective_end_date
                 ) Mgr_Pos ON Mgr_pos.assignment_id = a.manager_assignment_id
 ORDER BY 
-    TO_DATE(ad.element_start_date, 'dd-MM-yyyy') DESC
+    TO_DATE(ad.element_start_date, 'dd-MM-yyyy') 
+
+/* -------------------------------- Filters------------------------------------------- */
+
+/* Element Name */
+SELECT 
+    DISTINCT petf.base_element_name AS Element_Name
+FROM 
+    pay_element_entries_f peef  
+    INNER JOIN pay_element_types_f petf ON peef.element_type_id = petf.element_type_id
+    LEFT JOIN fnd_lookup_values flv ON petf.base_element_name = flv.meaning
+WHERE 
+    flv.lookup_type = 'HUD_ALLOWANCE_LIST'
+    AND flv.language = 'US'
+    AND petf.base_element_name NOT IN ('HUD PSA Union Membership', 'HUD Ex Gratia')
+    AND flv.description = :Description_Type
+
+/* Description Type*/
+SELECT 
+    DISTINCT flv.description
+FROM   
+    pay_element_entries_f peef  
+    INNER JOIN pay_element_types_f petf ON peef.element_type_id = petf.element_type_id  
+    LEFT JOIN fnd_lookup_values flv ON petf.base_element_name = flv.meaning   
+WHERE 
+    flv.lookup_type = 'HUD_ALLOWANCE_LIST'
+    AND flv.language = 'US'
