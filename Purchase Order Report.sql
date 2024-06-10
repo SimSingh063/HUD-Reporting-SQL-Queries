@@ -124,7 +124,7 @@ FROM
             FROM 
                 okc_k_headers_all_b okch
                 INNER JOIN okc_dts_deliverables_b okcd ON okcd.chr_id = okch.id AND okcd.deliverable_status not in ('INCOMPLETE','CANCELED')
-                LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version AND okcl.line_id = okcd.cle_id 
+                LEFT JOIN okc_k_lines_b okcl on okcl.chr_id = okch.id and okcl.major_version = okch.major_version AND (okcd.cle_id = okcl.line_id OR okcd.cle_id = okcl.id)
                 LEFT JOIN (SELECT 
                             hzp.party_name AS Contract_Owner, 
                             okcp.chr_id, 
