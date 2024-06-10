@@ -26,7 +26,8 @@ SELECT
     pol.quantity_cancelled, 
     pol.receipt_required_flag, 
     pol.POValue,
-    pol.input_tax_classification_code, 
+    pol.input_tax_classification_code,
+    pod.po_distribution_id,  
     gcc.segment2 || '-' || gcc.segment3 || '-' || gcc.segment4 AS Cost_Codes,
     ffv.description, 
     ppn.display_name AS full_name, 
@@ -49,7 +50,9 @@ SELECT
     Contracts.contract_owner, 
     Contracts.line_id, 
     Contracts.line_number AS Con_line_number, 
-    Contracts.line_amount AS Con_line_amount
+    Contracts.line_amount AS Con_line_amount, 
+    invoices.latest_inv_date, 
+    invoices.latest_inv_creation_date
 FROM 
     PO_HEADERS_ALL poh 
     INNER JOIN PO_LINES_ALL pla ON pla.po_header_id = poh.po_header_id
@@ -143,6 +146,33 @@ FROM
                         OR (Contracts.purchasing_pk1_value = pla.contract_id) 
                         OR ((Contracts.purchasing_pk1_value = pla.contract_id AND Contracts.Purchasing_category_id = pla.category_id) OR (Contracts.purchasing_pk1_value = pla.contract_id)) 
                         OR ((Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num AND contracts.Purchasing_category_id = pla.category_id) OR (Contracts.po_doc_number = poh.segment1 AND Contracts.po_line_number = pla.line_num))
+    LEFT JOIN (
+            SELECT 
+                inv.po_distribution_id, 
+                TO_CHAR(MAX(inv.invoice_date),'dd-MM-yyyy') AS latest_inv_date,
+                TO_CHAR(MAX(inv.invoice_creation_date), 'dd-MM-yyyy') AS latest_inv_creation_date
+            FROM(
+                SELECT 
+                    aia.invoice_id, 
+                    aila.period_name,
+                    aia.invoice_num, 
+                    aia.invoice_date,  
+                    aia.creation_date AS invoice_creation_date, 
+                    aila.Creation_Date AS invoice_line_creation_date,
+                    aida.po_distribution_id
+                FROM 
+                    ap_invoices_all aia  
+					INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id  
+					INNER JOIN ap_invoice_distributions_all aida ON aida.invoice_id = aia.invoice_id AND aila.line_number = aida.invoice_line_number
+                WHERE 
+                    aia.approval_status = 'APPROVED'
+                    AND aila.line_type_lookup_code = 'ITEM'
+                    AND aida.line_type_lookup_code = 'ITEM'
+                    AND aila.discarded_flag = 'N'
+                )inv
+            GROUP BY 
+                inv.po_distribution_id
+            )invoices ON invoices.po_distribution_id = pod.po_distribution_id
 WHERE 
     ppn.name_type = 'GLOBAL'
     AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
