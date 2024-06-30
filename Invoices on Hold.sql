@@ -17,7 +17,12 @@ FROM (
         aia.invoice_id,    
         aia.invoice_num,  
         aia.invoice_amount,    
-        aia.description AS invoice_description,    
+        aia.description AS invoice_description,  
+        CASE 
+            WHEN aia.created_by = 'Batch.Scheduler' THEN 'Batch Scheduler'
+            ELSE UPPER(SUBSTR(SUBSTR(aia.created_by, 1, INSTR(aia.created_by, '.') - 1), 1, 1)) ||  LOWER(SUBSTR(SUBSTR(aia.created_by, 1, INSTR(aia.created_by, '.') - 1), 2)) || ' ' || 
+                UPPER(SUBSTR(SUBSTR(aia.created_by, INSTR(aia.created_by, '.') + 1, INSTR(aia.created_by, '@') - INSTR(aia.created_by, '.') - 1), 1, 1)) ||  LOWER(SUBSTR(SUBSTR(aia.created_by, INSTR(aia.created_by, '.') + 1, INSTR(aia.created_by, '@') - INSTR(aia.created_by, '.') - 1), 2)) 
+        END AS created_by,  
         aha.hold_lookup_code,   
         aha.hold_reason,      
         alc.description AS lookup_description,   
@@ -43,10 +48,9 @@ FROM (
     LEFT JOIN po_lines_all pla ON pla.po_header_id = pll.po_header_id AND pla.po_line_id = pll.po_line_id 
     LEFT JOIN Po_distributions_all pod ON pla.po_header_id = pod.po_header_id AND pla.po_line_id = pod.po_line_id AND pod.line_location_id = pll.line_location_id  
     LEFT JOIN po_headers_all pha ON pha.po_header_id = pll.po_header_id  
-    LEFT JOIN per_person_names_f ppn ON pod.deliver_to_person_id = ppn.person_id
+    LEFT JOIN per_person_names_f ppn ON pod.deliver_to_person_id = ppn.person_id AND ppn.name_type = 'GLOBAL'
 WHERE 
     inv_hold.invoice_amount <> 0
-    AND ppn.name_type = 'GLOBAL'
     AND TRUNC(SYSDATE) BETWEEN ppn.effective_start_date AND ppn.effective_end_date
     AND (COALESCE(NULL, :HoldReason) IS NULL OR inv_hold.displayed_field IN (:HoldReason))
     AND (COALESCE(NULL, :BusinessUnit) IS NULL OR inv_hold.Business_Unit IN (:BusinessUnit))
