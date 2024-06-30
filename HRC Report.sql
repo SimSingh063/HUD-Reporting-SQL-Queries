@@ -27,7 +27,10 @@ SELECT
     hrc.mid_value,
     hrc.maximum,
     hrc.fte,
-    hrc.Ethnicity1,
+    CASE 
+        WHEN hrc.Ethnicity1 >= 90000 AND hrc.Ethnicity2 IS NOT NULL THEN hrc.Ethnicity2
+        ELSE hrc.Ethnicity1
+    END AS Ethnicity1,
     CASE
         WHEN hrc.Ethnicity1 = hrc.Ethnicity2 THEN NULL
         WHEN hrc.Ethnicity1 >= 90000 THEN NULL
@@ -35,6 +38,7 @@ SELECT
     END AS Ethnicity2,
     CASE
         WHEN hrc.Ethnicity2 = hrc.Ethnicity3 THEN NULL
+        WHEN hrc.Ethnicity1 = hrc.Ethnicity3 THEN NULL
         WHEN hrc.Ethnicity1 >= 90000 THEN NULL
         ELSE hrc.Ethnicity3
     END AS Ethnicity3,
