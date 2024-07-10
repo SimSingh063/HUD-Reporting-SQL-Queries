@@ -42,13 +42,15 @@ FROM
     LEFT JOIN PER_GRADES_F_VL gr ON gr.grade_id = aa.grade_id
 WHERE
     p.name_type = 'GLOBAL'
-    AND pps.period_of_service_id = (
+    AND pps.period_of_service_id IN (
                                     SELECT 
-                                        MAX(period_of_service_id)
+                                        period_of_service_id
                                     FROM 
                                         per_periods_of_service ppof
                                     WHERE 
                                         ppof.person_id = p.person_id
+                                        AND ppof.period_type IN ('E','C')
+                                        AND ppof.actual_termination_date IS NOT NULL
                                     )
     AND TRUNC(SYSDATE) BETWEEN ppl.effective_start_date AND ppl.effective_end_date
     AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
