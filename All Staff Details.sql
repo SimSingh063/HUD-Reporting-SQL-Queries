@@ -196,5 +196,5 @@ FROM
 				   asg.effective_latest_change = 'Y'
 				   AND asg.assignment_type = 'E' /*Only looking for Salary for Permanent or Fixed Term Employees. Contractors and Consultants dont have a salary*/
                    AND csa.date_from BETWEEN asg.effective_start_date AND asg.effective_end_date
-				   AND sysdate BETWEEN csa.date_from AND csa.date_to
+				   AND :data_as_off BETWEEN csa.date_from AND csa.date_to
 	           ) Sal ON Sal.person_id = Person.person_id AND Sal.Assignment_ID = Person.Assignment_ID AND Sal.Grade_ID = Person.Grade_ID
