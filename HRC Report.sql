@@ -92,7 +92,7 @@ FROM
                     per_people_legislative_f ppl
                 WHERE
                     ppl.person_id = assign.person_id
-                    AND TRUNC(SYSDATE) BETWEEN ppl.effective_start_date
+                    AND :DATE_TO BETWEEN ppl.effective_start_date
                     AND ppl.effective_end_date
             ) Gender,
             (
@@ -123,7 +123,7 @@ FROM
                 WHERE
                     Fteval.unit = 'FTE'
                     AND fteval.assignment_id = assign.assignment_id
-                    AND TRUNC(SYSDATE) BETWEEN fteval.effective_start_date
+                    AND :DATE_TO BETWEEN fteval.effective_start_date
                     AND fteval.effective_end_date
             ) Fte,
             COALESCE(
@@ -247,7 +247,7 @@ FROM
                     per_people_f ppf
                 WHERE
                     ppf.person_id = assign.manager_id
-                    AND TRUNC(SYSDATE) BETWEEN ppf.effective_start_date
+                    AND :DATE_TO BETWEEN ppf.effective_start_date
                     AND ppf.effective_end_date
             ) Manager_Number,
             (
@@ -266,52 +266,52 @@ FROM
                 WHERE
                     paa.assignment_id = assign.manager_assignment_id
                     AND paa.assignment_type IN ('E')
-                    AND TRUNC(SYSDATE) BETWEEN hap.effective_start_date
+                    AND :DATE_TO BETWEEN hap.effective_start_date
                     AND hap.effective_end_date
-                    AND TRUNC(SYSDATE) BETWEEN paa.effective_start_date
+                    AND :DATE_TO BETWEEN paa.effective_start_date
                     AND paa.effective_end_date
             ) ManagementProfile
         FROM
             (
-                          WITH assignment AS (
-                            SELECT
-                                aa.person_id,
-                                aa.assignment_number,
-                                aa.assignment_id,
-                                aa.assignment_name,
-                                aa.employment_category,
-                                aa.primary_flag,
-                                aa.position_id,
-                                aa.assignment_status_type,
-                                aa.grade_id,
-                                aa.effective_start_date,
-                                aa.effective_end_date
-                            FROM
-                                per_all_assignments_m aa
-                            WHERE
-                                aa.assignment_type = 'E'
-                                AND aa.effective_latest_change = 'Y'
-                                AND aa.assignment_status_type <> 'INACTIVE'
-                                --AND aa.assignment_number LIKE 'E2030%'
-                                AND (
-                                    aa.effective_start_date >= :DATE_FROM
-                                    OR :DATE_FROM BETWEEN aa.effective_start_date
-                                    AND aa.effective_end_date
-                                )
-                                AND aa.effective_end_date >= :DATE_FROM
-                                AND (
-                                    aa.effective_start_date <= (
-                                        CASE
-                                            WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
-                                        END
-                                    )
-                                    OR aa.effective_start_date <= (
-                                        CASE
-                                            WHEN :DATE_TO IS NULL THEN SYSDATE
-                                        END
-                                    )
-                                )
-                        ),
+                WITH assignment AS (
+                    SELECT
+                        aa.person_id,
+                        aa.assignment_number,
+                        aa.assignment_id,
+                        aa.assignment_name,
+                        aa.employment_category,
+                        aa.primary_flag,
+                        aa.position_id,
+                        aa.assignment_status_type,
+                        aa.grade_id,
+                        aa.effective_start_date,
+                        aa.effective_end_date
+                    FROM
+                        per_all_assignments_m aa
+                    WHERE
+                        aa.assignment_type = 'E'
+                        AND aa.effective_latest_change = 'Y' 
+                        AND aa.assignment_status_type <> 'INACTIVE'
+                        --AND aa.assignment_number LIKE 'E2030%'
+                        AND (
+                            aa.effective_start_date >= :DATE_FROM
+                            OR :DATE_FROM BETWEEN aa.effective_start_date
+                            AND aa.effective_end_date
+                        )
+                        AND aa.effective_end_date >= :DATE_FROM
+                        AND (
+                            aa.effective_start_date <= (
+                                CASE
+                                    WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
+                                END
+                            )
+                            OR aa.effective_start_date <= (
+                                CASE
+                                    WHEN :DATE_TO IS NULL THEN SYSDATE
+                                END
+                            )
+                        )
+                ),
                 latest_assignment AS (
                     SELECT
                         MAX(asi.effective_end_date) AS effective_end_date,
@@ -331,86 +331,117 @@ FROM
                         latest_assignment lass
                     GROUP BY
                         lass.person_id
-                ), 
+                ),
+                assig_details AS (
+                    SELECT
+                        asg.* --,
+                        --m.manager_assignment_id,
+                        --m.manager_id
+                    FROM
+                        assignment asg
+                        INNER JOIN latest_assignment la ON la.person_id = asg.person_id
+                        AND la.effective_end_date = asg.effective_end_date
+                        AND la.assignment_id = asg.assignment_id
+                        INNER JOIN assignment_count ac ON ac.person_id = asg.person_id --INNER JOIN manager m ON m.person_id = asg.person_id --AND m.assignment_id = asg.assignment_id 
+                    WHERE
+                        (
+                            ac.Assig_Count = 1
+                            AND asg.primary_flag = 'Y'
+                            AND asg.assignment_status_type = 'ACTIVE'
+                            AND asg.employment_category IN(
+                                'HUD_SUBSTANTIVE_POSITION',
+                                'HUD_FIX_TERM',
+                                'HUD_EXTERNAL_SECONDMENT',
+                                'HUD_INTERNAL_SECONDMENT'
+                            )
+                        )
+                        OR(
+                            ac.Assig_Count = 1
+                            AND asg.primary_flag = 'Y'
+                            AND asg.assignment_status_type = 'SUSPENDED'
+                            AND (
+                                asg.employment_category = 'HUD_LEAVE_WO_PAY'
+                                OR asg.employment_category = 'HUD_PARENTAL_LEAVE'
+                            )
+                        )
+                        OR (
+                            ac.Assig_Count >= 2
+                            AND asg.primary_flag = 'N'
+                            AND asg.assignment_status_type = 'SUSPENDED'
+                            AND asg.employment_category IN ('HUD_SUBSTANTIVE_POSITION', 'HUD_FIX_TERM')
+                            /* When the seconded assignment is still active in the current year*/
+                        )
+                        OR (
+                            ac.Assig_Count >= 2
+                            AND asg.primary_flag = 'Y'
+                            AND asg.assignment_status_type = 'ACTIVE'
+                            AND asg.employment_category IN ('HUD_SUBSTANTIVE_POSITION', 'HUD_FIX_TERM')
+                            /* When the seconded assignment has ended and the person is back on their substantial assignment*/
+                        )
+                ),
                 mgr_assignment AS (
-                SELECT 
-                pas.person_id, 
-                pas.assignment_id,
-                pas.manager_assignment_id,
-                pas.manager_id, 
-                pas.effective_start_Date, 
-                pas.effective_end_date
-                FROM per_assignment_supervisors_f_v pas
-                WHERE pas.assignment_id IN (SELECT assignment_id FROM latest_assignment)
-                AND (
-                    pas.effective_start_date >= :DATE_FROM
-                    OR :DATE_FROM BETWEEN pas.effective_start_date
-                    AND pas.effective_end_date
-                )
-                AND pas.effective_end_date >= :DATE_FROM
-                AND (
-                    pas.effective_start_date <= (
-                        CASE
-                            WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
-                        END
-                    )
-                    OR pas.effective_start_date <= (
-                        CASE
-                            WHEN :DATE_TO IS NULL THEN SYSDATE
-                        END
-                    )
-                )
-                ), 
+                    SELECT
+                        pas.person_id,
+                        pas.assignment_id,
+                        pas.manager_assignment_id,
+                        pas.manager_id,
+                        pas.effective_start_Date,
+                        pas.effective_end_date
+                    FROM
+                        per_assignment_supervisors_f_v pas
+                    WHERE
+                        pas.assignment_id IN (
+                            SELECT
+                                assignment_id
+                            FROM
+                                assig_details
+                        )
+                        AND (
+                            pas.effective_start_date >= :DATE_FROM
+                            OR :DATE_FROM BETWEEN pas.effective_start_date
+                            AND pas.effective_end_date
+                        )
+                        AND pas.effective_end_date >= :DATE_FROM
+                        AND (
+                            pas.effective_start_date <= (
+                                CASE
+                                    WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
+                                END
+                            )
+                            OR pas.effective_start_date <= (
+                                CASE
+                                    WHEN :DATE_TO IS NULL THEN SYSDATE
+                                END
+                            )
+                        )
+                ),
                 latest_mgr_assignment AS (
-                    SELECT 
-                    MAX(ma.effective_end_date) AS effective_end_date, 
-                    ma.assignment_id, 
-                    ma.person_id
-                    FROM 
-                    mgr_assignment ma 
-                    GROUP BY 
-                    ma.assignment_id, 
-                    ma.person_id
-                                    ),                
+                    SELECT
+                        MAX(ma.effective_end_date) AS effective_end_date,
+                        --ma.assignment_id, 
+                        ma.person_id
+                    FROM
+                        mgr_assignment ma
+                    GROUP BY
+                        --ma.assignment_id, 
+                        ma.person_id
+                ),
                 manager AS (
-                SELECT 
-                mas.*
-                FROM 
-                    mgr_assignment mas
-                    INNER JOIN latest_mgr_assignment lma ON lma.effective_end_date = mas.effective_end_date AND lma.assignment_id = mas.assignment_id AND lma.person_id =  mas.person_id 
+                    SELECT
+                        mas.*
+                    FROM
+                        mgr_assignment mas
+                        INNER JOIN latest_mgr_assignment lma ON lma.effective_end_date = mas.effective_end_date
+                        AND lma.person_id = mas.person_id -- AND lma.assignment_id = mas.assignment_id
                 )
-                  
                 SELECT
-                    DISTINCT asg.*, 
-                    m.manager_assignment_id, 
+                    ad.*,
+                    m.manager_assignment_id,
                     m.manager_id
                 FROM
-                    assignment asg
-                    INNER JOIN latest_assignment la ON la.person_id = asg.person_id
-                    AND la.person_id = asg.person_id
-                    AND la.effective_end_date = asg.effective_end_date
-                    INNER JOIN assignment_count ac ON ac.person_id = asg.person_id
-                    INNER JOIN manager m ON m.assignment_id = asg.assignment_id AND m.person_id = asg.person_id
-                WHERE
-                    (
-                        ac.Assig_Count = 1
-                        AND asg.primary_flag = 'Y'
-                        AND asg.assignment_status_type = 'ACTIVE'
-                    )
-                    OR(
-                        ac.Assig_Count = 1
-                        AND asg.primary_flag = 'Y'
-                        AND asg.assignment_status_type = 'SUSPENDED'
-                        AND (
-                            asg.employment_category = 'HUD_LEAVE_WO_PAY'
-                            OR asg.employment_category = 'HUD_PARENTAL_LEAVE'
-                        )
-                    )
-                    OR (
-                        ac.Assig_Count = 2
-                        AND asg.primary_flag = 'N'
-                        AND asg.assignment_status_type = 'SUSPENDED'
-                    )
+                    assig_details ad
+                    INNER JOIN manager m ON m.person_id = ad.person_id
+                    AND m.assignment_id = ad.assignment_id
             ) Assign
             INNER JOIN per_person_names_f p ON p.person_id = assign.person_id
             INNER JOIN per_people_f ppl ON ppl.person_id = assign.person_id
@@ -422,43 +453,68 @@ FROM
             LEFT JOIN (
                 WITH Salary AS (
                     SELECT
-                        csa.salary_amount,
-                        csa.Annual_Ft_Salary,
-                        csa.person_id,
-                        csa.assignment_id,
-                        csa.FTE_Value,
-                        csb.salary_basis_id,
-                        asg.grade_id,
+                        s.*,
                         prv.minimum,
                         prv.maximum,
-                        prv.mid_value,
-                        csa.date_from,
-                        csa.date_to
+                        prv.mid_value
                     FROM
-                        cmp_salary csa
-                        INNER JOIN per_all_assignments_m asg ON asg.assignment_id = csa.assignment_id
-                        INNER JOIN cmp_salary_bases_vl csb ON csb.salary_basis_id = csa.salary_basis_id
-                        INNER JOIN per_rate_values_f prv ON asg.grade_id = prv.rate_object_id
-                        AND csb.grade_rate_id = prv.rate_id
+                        (
+                            SELECT
+                                csa.salary_amount,
+                                csa.Annual_Ft_Salary,
+                                csa.person_id,
+                                csa.assignment_id,
+                                csa.FTE_Value,
+                                csb.salary_basis_id,
+                                csb.grade_rate_id,
+                                asg.grade_id,
+                                csa.date_from,
+                                csa.date_to
+                            FROM
+                                cmp_salary csa
+                                INNER JOIN per_all_assignments_m asg ON asg.assignment_id = csa.assignment_id
+                                INNER JOIN cmp_salary_bases_vl csb ON csb.salary_basis_id = csa.salary_basis_id
+                            WHERE
+                                asg.effective_latest_change = 'Y'
+                                AND asg.assignment_type = 'E'
+                                /*Only looking for Salary for Permanent or Fixed Term Employees. Contractors and Consultants dont have a salary*/
+                                AND csa.date_from BETWEEN asg.effective_start_date
+                                AND asg.effective_end_date
+                                AND (
+                                    csa.date_from >= :DATE_FROM
+                                    OR :DATE_FROM BETWEEN csa.date_from
+                                    AND csa.date_to
+                                )
+                                AND csa.date_to >= :DATE_FROM
+                                AND (
+                                    csa.date_from <= (
+                                        CASE
+                                            WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
+                                        END
+                                    )
+                                    OR csa.date_from <= (
+                                        CASE
+                                            WHEN :DATE_TO IS NULL THEN SYSDATE
+                                        END
+                                    )
+                                )
+                        ) s
+                        INNER JOIN per_rate_values_f prv ON s.grade_id = prv.rate_object_id
+                        AND s.grade_rate_id = prv.rate_id
                     WHERE
-                        asg.effective_latest_change = 'Y'
-                        AND asg.assignment_type = 'E'
-                        /*Only looking for Salary for Permanent or Fixed Term Employees. Contractors and Consultants dont have a salary*/
-                        AND csa.date_from BETWEEN asg.effective_start_date
-                        AND asg.effective_end_date
-                        AND (
-                            csa.date_from >= :DATE_FROM
-                            OR :DATE_FROM BETWEEN csa.date_from
-                            AND csa.date_to
+                        (
+                            prv.effective_start_date >= :DATE_FROM
+                            OR :DATE_FROM BETWEEN prv.effective_start_date
+                            AND prv.effective_end_date
                         )
-                        AND csa.date_to >= :DATE_FROM
+                        AND prv.effective_end_date >= :DATE_FROM
                         AND (
-                            csa.date_from <= (
+                            prv.effective_start_date <= (
                                 CASE
                                     WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
                                 END
                             )
-                            OR csa.date_from <= (
+                            OR prv.effective_start_date <= (
                                 CASE
                                     WHEN :DATE_TO IS NULL THEN SYSDATE
                                 END
@@ -500,35 +556,35 @@ FROM
                     hcm.lookup_type = 'EMP_CAT'
                     AND pa.assignment_status_type in ('ACTIVE', 'SUSPENDED')
                     AND pa.assignment_type in('E')
-                    AND TRUNC(SYSDATE) BETWEEN pa.effective_start_date
+                    AND :DATE_TO BETWEEN pa.effective_start_date
                     AND pa.effective_end_date
             ) as_cat ON as_cat.person_id = assign.person_id
             AND as_cat.position_id = assign.position_id
             AND as_cat.assignment_id = assign.assignment_id
         WHERE
             p.name_type = 'GLOBAL'
-            AND TRUNC(SYSDATE) BETWEEN p.effective_start_date
+            AND :DATE_TO BETWEEN p.effective_start_date
             AND p.effective_end_date
-            AND TRUNC(SYSDATE) BETWEEN ppl.effective_start_date
+            AND :DATE_TO BETWEEN ppl.effective_start_date
             AND ppl.effective_end_date
             AND (
                 (
-                    TRUNC(SYSDATE) BETWEEN pps.date_start
+                    pps.period_type = 'E'
+                    AND :DATE_TO BETWEEN pps.date_start
                     AND pps.actual_termination_date
                 )
                 OR (
-                    pps.date_start <= TRUNC(SYSDATE)
+                    pps.period_type = 'E'
+                    AND pps.date_start <= TRUNC(SYSDATE)
                     AND pps.actual_termination_date IS NULL
                 )
-            )
-            AND pps.Period_type = 'E'
-            AND TRUNC(SYSDATE) BETWEEN hrp.effective_start_date
+            ) --AND pps.Period_type = 'E'
+            AND :DATE_TO BETWEEN hrp.effective_start_date
             AND hrp.effective_end_date
-            AND TRUNC(SYSDATE) BETWEEN pd.effective_start_date
+            AND :DATE_TO BETWEEN pd.effective_start_date
             AND pd.effective_end_date
-        
-        UNION ALL 
-        
+        UNION
+        ALL
         SELECT
             p.person_id,
             p.Full_Name,
@@ -768,29 +824,54 @@ FROM
             INNER JOIN per_assignment_supervisors_f_v pas ON pas.assignment_id = aa.assignment_id
             LEFT JOIN (
                 SELECT
-                    csa.salary_amount,
-                    csa.Annual_Ft_Salary,
-                    csa.person_id,
-                    csa.assignment_id,
-                    csa.FTE_Value,
-                    csb.salary_basis_id,
-                    csa.date_from,
-                    csa.date_to,
-                    asg.grade_id,
+                    s.*,
                     prv.minimum,
                     prv.maximum,
                     prv.mid_value
                 FROM
-                    cmp_salary csa
-                    INNER JOIN per_all_assignments_m asg ON asg.assignment_id = csa.assignment_id
-                    INNER JOIN cmp_salary_bases_vl csb ON csb.salary_basis_id = csa.salary_basis_id
-                    INNER JOIN per_rate_values_f prv ON asg.grade_id = prv.rate_object_id
-                    AND csb.grade_rate_id = prv.rate_id
+                    (
+                        SELECT
+                            csa.salary_amount,
+                            csa.Annual_Ft_Salary,
+                            csa.person_id,
+                            csa.assignment_id,
+                            csa.FTE_Value,
+                            csb.salary_basis_id,
+                            csa.date_from,
+                            csa.date_to,
+                            csb.grade_rate_id,
+                            asg.grade_id
+                        FROM
+                            cmp_salary csa
+                            INNER JOIN per_all_assignments_m asg ON asg.assignment_id = csa.assignment_id
+                            INNER JOIN cmp_salary_bases_vl csb ON csb.salary_basis_id = csa.salary_basis_id
+                        WHERE
+                            asg.effective_latest_change = 'Y'
+                            AND asg.assignment_type = 'E'
+                            AND csa.date_from BETWEEN asg.effective_start_date
+                            AND asg.effective_end_date --AND csa.person_id =
+                    ) s
+                    INNER JOIN per_rate_values_f prv ON s.grade_id = prv.rate_object_id
+                    AND s.grade_rate_id = prv.rate_id
                 WHERE
-                    asg.effective_latest_change = 'Y'
-                    AND asg.assignment_type = 'E'
-                    AND csa.date_from BETWEEN asg.effective_start_date
-                    AND asg.effective_end_date
+                    (
+                        prv.effective_start_date >= :DATE_FROM
+                        OR :DATE_FROM BETWEEN prv.effective_start_date
+                        AND prv.effective_end_date
+                    )
+                    AND prv.effective_end_date >= :DATE_FROM
+                    AND (
+                        prv.effective_start_date <= (
+                            CASE
+                                WHEN :DATE_TO IS NOT NULL THEN :DATE_TO
+                            END
+                        )
+                        OR prv.effective_start_date <= (
+                            CASE
+                                WHEN :DATE_TO IS NULL THEN SYSDATE
+                            END
+                        )
+                    )
             ) Sal ON sal.person_id = aa.person_id
             AND sal.assignment_id = aa.assignment_id
             AND sal.grade_id = aa.grade_id
@@ -802,20 +883,21 @@ FROM
                 AND aa.assignment_status_type = 'INACTIVE'
             )
             AND aa.primary_flag = 'Y'
-            AND pps.actual_termination_date < TRUNC(SYSDATE)
+            AND pps.actual_termination_date < :DATE_TO
+            AND pps.period_type = 'E'
             AND pps.period_of_service_id = (
-                                    SELECT 
-                                        period_of_service_id
-                                    FROM 
-                                        per_periods_of_service ppof
-                                    WHERE 
-                                        ppof.person_id = p.person_id
-                                        AND ppof.period_type = 'E'
-                                        AND ppof.actual_termination_date IS NOT NULL
+                SELECT
+                    period_of_service_id
+                FROM
+                    per_periods_of_service ppof
+                WHERE
+                    ppof.person_id = p.person_id
+                    AND ppof.period_type = 'E'
+                    AND ppof.actual_termination_date IS NOT NULL
             )
-            AND TRUNC(SYSDATE) BETWEEN ppl.effective_start_date
+            AND pps.actual_termination_date BETWEEN ppl.effective_start_date
             AND ppl.effective_end_date
-            AND TRUNC(SYSDATE) BETWEEN p.effective_start_date
+            AND pps.actual_termination_date BETWEEN p.effective_start_date
             AND p.effective_end_date
             AND pps.actual_termination_date BETWEEN hrp.effective_start_date
             AND hrp.effective_end_date
