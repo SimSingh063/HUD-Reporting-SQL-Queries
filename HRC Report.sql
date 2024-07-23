@@ -3,8 +3,9 @@
  Author - Simranjeet Singh
  Date - 01/07/2024
  Department - People and Community
- Description -  
+ Description -  Annual and Quarterly Workforce Report for the Public Service Commission 
  */
+
 SELECT
     hrc.person_id,
     hrc.Full_Name,
