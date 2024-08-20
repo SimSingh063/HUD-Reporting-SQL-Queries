@@ -106,13 +106,13 @@ SELECT
 	Person.Leave_return_date, 
 	Person.Projected_End_Date, 
 	pft.Assignment_Category,
-	fte.FTE, 
+	sal.FTE, 
 	mgr.Manager_Name,
 	mgr.Manager_Number, 
 	mgr.Position_code AS Manager_position_code,
 	mgr.Name AS Manager_position_Name, 
 	sal.Annual_Ft_Salary,
-	Salary_Amount
+	sal.Salary_Amount
 FROM 
     Position
 	INNER JOIN Person ON Person.position_id = Position.position_id
@@ -173,21 +173,12 @@ FROM
 				WHERE 
 				    :data_as_off BETWEEN grstp.effective_start_date AND grstp.effective_end_date    
 			  )Step ON Step.assignment_id = person.assignment_id AND Step.grade_id = Person.grade_id
-	LEFT JOIN (SELECT 
-	                Fteval.value AS FTE, 
-					Fteval.assignment_id
-			   FROM 
-				    PER_ASSIGN_WORK_MEASURES_F Fteval 
-			   WHERE 
-				    Fteval.unit = 'FTE'
-					AND :data_as_off BETWEEN fteval.effective_start_date AND fteval.effective_end_date 
-              ) Fte ON fte.assignment_id = person.assignment_id	
     LEFT JOIN (SELECT
                    csa.salary_amount,
                    csa.Annual_Ft_Salary,
 				   csa.person_id, 
 				   csa.assignment_id,
-				   csa.FTE_Value,
+				   csa.FTE_Value AS FTE,
 				   asg.grade_id 
 			   FROM
 			       cmp_salary csa
