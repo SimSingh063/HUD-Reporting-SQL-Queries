@@ -206,48 +206,59 @@ ranked_person AS (
 		AND Sal.Grade_ID = Person.Grade_ID
 ),
 cost_center_hierarchy AS (
-SELECT
-    DISTINCT dce.pk1_start_value AS DCE_Group,
-    ffv.description AS dec_group_desc,
-    CASE
-        WHEN gm.depth = 1 THEN gm.pk1_start_value
-        ELSE NULL
-    END AS GM_Group,
-    CASE
-        WHEN gm.depth = 1 THEN ffv2.description
-        ELSE NULL
-    END AS gm_group_desc,
-    CASE
-        WHEN gm.depth = 2 THEN gm.pk1_start_value
-        ELSE cc.pk1_start_value
-    END AS cost_center
-FROM
-    fnd_tree_node dce
-    LEFT JOIN fnd_tree_node gm ON dce.tree_node_id = gm.parent_tree_node_id
-    AND dce.tree_version_id = gm.tree_version_id
-    AND dce.depth < gm.depth
-    LEFT JOIN fnd_tree_node cc ON gm.tree_node_id = cc.parent_tree_node_id
-    AND gm.tree_version_id = cc.tree_version_id
-    AND gm.depth < cc.depth
-    LEFT JOIN fnd_flex_values_vl ffv ON dce.pk1_start_value = ffv.flex_value
-    LEFT JOIN fnd_flex_values_vl ffv2 ON gm.pk1_start_value = ffv2.flex_value
-WHERE
-    dce.tree_structure_code = 'GL_ACCT_FLEX'
-    AND dce.tree_code = 'HUD COST CENTER'
-    AND dce.parent_tree_node_id IS NULL
-    AND dce.tree_version_id IN (
-        SELECT
-            ftv.tree_version_id
-        FROM
-            fnd_tree_version_vl ftv
-        WHERE
-            ftv.tree_structure_code = 'GL_ACCT_FLEX'
-            AND ftv.tree_code = 'HUD COST CENTER'
-            AND ftv.status = 'ACTIVE'
-            AND TRUNC(SYSDATE) BETWEEN ftv.effective_start_date
-            AND ftv.effective_end_date
-    )
-    AND ffv.description NOT IN 'Historical Cost Centres'
+	SELECT
+		a.*,
+		ffv3.description AS cc_group_desc
+	FROM
+		(
+			SELECT
+				DISTINCT dce.pk1_start_value AS DCE_Group,
+				ffv.description AS dec_group_desc,
+				CASE
+					WHEN gm.depth = 1 THEN gm.pk1_start_value
+					ELSE NULL
+				END AS GM_Group,
+				CASE
+					WHEN gm.depth = 1 THEN ffv2.description
+					ELSE NULL
+				END AS gm_group_desc,
+				CASE
+					WHEN gm.depth = 2 THEN gm.pk1_start_value
+					ELSE cc.pk1_start_value
+				END AS cost_center
+			FROM
+				fnd_tree_node dce
+				LEFT JOIN fnd_tree_node gm ON dce.tree_node_id = gm.parent_tree_node_id
+				AND dce.tree_version_id = gm.tree_version_id
+				AND dce.depth < gm.depth
+				LEFT JOIN fnd_tree_node cc ON gm.tree_node_id = cc.parent_tree_node_id
+				AND gm.tree_version_id = cc.tree_version_id
+				AND gm.depth < cc.depth
+				LEFT JOIN fnd_flex_values_vl ffv ON dce.pk1_start_value = ffv.flex_value
+				LEFT JOIN fnd_flex_values_vl ffv2 ON gm.pk1_start_value = ffv2.flex_value
+			WHERE
+				dce.tree_structure_code = 'GL_ACCT_FLEX'
+				AND dce.tree_code = 'HUD COST CENTER'
+				AND dce.parent_tree_node_id IS NULL
+				AND ffv.value_category = 'HUD_COST_CENTER'
+				AND ffv2.value_category = 'HUD_COST_CENTER'
+				AND dce.tree_version_id IN (
+					SELECT
+						ftv.tree_version_id
+					FROM
+						fnd_tree_version_vl ftv
+					WHERE
+						ftv.tree_structure_code = 'GL_ACCT_FLEX'
+						AND ftv.tree_code = 'HUD COST CENTER'
+						AND ftv.status = 'ACTIVE'
+						AND TRUNC(SYSDATE) BETWEEN ftv.effective_start_date
+						AND ftv.effective_end_date
+				)
+				AND ffv.description NOT IN 'Historical Cost Centres'
+		) a
+		LEFT JOIN fnd_flex_values_vl ffv3 ON a.cost_center = ffv3.flex_value
+	WHERE
+		ffv3.value_category = 'HUD_COST_CENTER'
 ),
 pivoted_person AS (
 	SELECT
@@ -383,10 +394,11 @@ SELECT
 	Position.Group_Team,
 	Position.Parent_Position_Name,
 	Position.cost_center,
-	cch.DCE_Group, 
-	cch.dec_group_desc, 
-	cch.GM_Group, 
+	cch.DCE_Group,
+	cch.dec_group_desc,
+	cch.GM_Group,
 	cch.gm_group_desc,
+	cch.cc_group_desc,
 	Position.Band,
 	Position.mid_value,
 	1 AS Position_FTE,
@@ -411,14 +423,24 @@ SELECT
 	pp.secondary_salary_amount,
 	pp.secondary_FTE_Value,
 	CASE
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 IS NULL THEN 'Position Occupied'
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 = 'ACTIVE' THEN 'Position Occupied'
+		WHEN pp.Employment_Type2 = 'SUSPENDED'
+		AND pp.Secondary_Employment_Type2 IS NULL THEN 'Position Suspended'
+		WHEN pp.Employment_Type2 = 'SUSPENDED'
+		AND pp.Secondary_Employment_Type2 = 'ACTIVE' THEN 'Position Backfilled'
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 = 'SUSPENDED' THEN 'Position Backfilled'
 		WHEN pp.assignment_id IS NULL
 		AND position.position_id IS NOT NULL
-		AND rr.requisition_id IS NOT NULL THEN 'Active-Recruitment'
+		AND rr.requisition_id IS NOT NULL THEN 'Position in Active-Recruitment'
 		WHEN pp.assignment_id IS NULL
 		AND position.position_id IS NOT NULL
-		AND rr.requisition_id IS NULL THEN 'Vacant'
-		ELSE 'Occupied'
-	END Position_status
+		AND rr.requisition_id IS NULL THEN 'Position Vacant'
+		ELSE NULL
+	END AS Position_status
 FROM
 	Position
 	LEFT JOIN pivoted_person pp ON pp.position_id = Position.position_id
@@ -653,48 +675,59 @@ ranked_person AS (
 		AND Sal.Grade_ID = Person.Grade_ID
 ),
 cost_center_hierarchy AS (
-SELECT
-    DISTINCT dce.pk1_start_value AS DCE_Group,
-    ffv.description AS dec_group_desc,
-    CASE
-        WHEN gm.depth = 1 THEN gm.pk1_start_value
-        ELSE NULL
-    END AS GM_Group,
-    CASE
-        WHEN gm.depth = 1 THEN ffv2.description
-        ELSE NULL
-    END AS gm_group_desc,
-    CASE
-        WHEN gm.depth = 2 THEN gm.pk1_start_value
-        ELSE cc.pk1_start_value
-    END AS cost_center
-FROM
-    fnd_tree_node dce
-    LEFT JOIN fnd_tree_node gm ON dce.tree_node_id = gm.parent_tree_node_id
-    AND dce.tree_version_id = gm.tree_version_id
-    AND dce.depth < gm.depth
-    LEFT JOIN fnd_tree_node cc ON gm.tree_node_id = cc.parent_tree_node_id
-    AND gm.tree_version_id = cc.tree_version_id
-    AND gm.depth < cc.depth
-    LEFT JOIN fnd_flex_values_vl ffv ON dce.pk1_start_value = ffv.flex_value
-    LEFT JOIN fnd_flex_values_vl ffv2 ON gm.pk1_start_value = ffv2.flex_value
-WHERE
-    dce.tree_structure_code = 'GL_ACCT_FLEX'
-    AND dce.tree_code = 'HUD COST CENTER'
-    AND dce.parent_tree_node_id IS NULL
-    AND dce.tree_version_id IN (
-        SELECT
-            ftv.tree_version_id
-        FROM
-            fnd_tree_version_vl ftv
-        WHERE
-            ftv.tree_structure_code = 'GL_ACCT_FLEX'
-            AND ftv.tree_code = 'HUD COST CENTER'
-            AND ftv.status = 'ACTIVE'
-            AND TRUNC(SYSDATE) BETWEEN ftv.effective_start_date
-            AND ftv.effective_end_date
-    )
-    AND ffv.description NOT IN 'Historical Cost Centres'
+	SELECT
+		a.*,
+		ffv3.description AS cc_group_desc
+	FROM
+		(
+			SELECT
+				DISTINCT dce.pk1_start_value AS DCE_Group,
+				ffv.description AS dec_group_desc,
+				CASE
+					WHEN gm.depth = 1 THEN gm.pk1_start_value
+					ELSE NULL
+				END AS GM_Group,
+				CASE
+					WHEN gm.depth = 1 THEN ffv2.description
+					ELSE NULL
+				END AS gm_group_desc,
+				CASE
+					WHEN gm.depth = 2 THEN gm.pk1_start_value
+					ELSE cc.pk1_start_value
+				END AS cost_center
+			FROM
+				fnd_tree_node dce
+				LEFT JOIN fnd_tree_node gm ON dce.tree_node_id = gm.parent_tree_node_id
+				AND dce.tree_version_id = gm.tree_version_id
+				AND dce.depth < gm.depth
+				LEFT JOIN fnd_tree_node cc ON gm.tree_node_id = cc.parent_tree_node_id
+				AND gm.tree_version_id = cc.tree_version_id
+				AND gm.depth < cc.depth
+				LEFT JOIN fnd_flex_values_vl ffv ON dce.pk1_start_value = ffv.flex_value
+				LEFT JOIN fnd_flex_values_vl ffv2 ON gm.pk1_start_value = ffv2.flex_value
+			WHERE
+				dce.tree_structure_code = 'GL_ACCT_FLEX'
+				AND dce.tree_code = 'HUD COST CENTER'
+				AND dce.parent_tree_node_id IS NULL
+				AND ffv.value_category = 'HUD_COST_CENTER'
+				AND ffv2.value_category = 'HUD_COST_CENTER'
+				AND dce.tree_version_id IN (
+					SELECT
+						ftv.tree_version_id
+					FROM
+						fnd_tree_version_vl ftv
+					WHERE
+						ftv.tree_structure_code = 'GL_ACCT_FLEX'
+						AND ftv.tree_code = 'HUD COST CENTER'
+						AND ftv.status = 'ACTIVE'
+						AND TRUNC(SYSDATE) BETWEEN ftv.effective_start_date
+						AND ftv.effective_end_date
+				)
+				AND ffv.description NOT IN 'Historical Cost Centres'
+		) a
+		LEFT JOIN fnd_flex_values_vl ffv3 ON a.cost_center = ffv3.flex_value
+	WHERE
+		ffv3.value_category = 'HUD_COST_CENTER'
 ),
 pivoted_person AS (
 	SELECT
@@ -834,6 +867,7 @@ SELECT
 	cch.dec_group_desc, 
 	cch.GM_Group, 
 	cch.gm_group_desc,
+	cch.cc_group_desc,
 	Position.Band,
 	Position.mid_value,
 	1 AS Position_FTE,
@@ -870,14 +904,24 @@ SELECT
 	END AS secondary_salary_amount,
 	pp.secondary_FTE_Value,
 	CASE
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 IS NULL THEN 'Position Occupied'
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 = 'ACTIVE' THEN 'Position Occupied'
+		WHEN pp.Employment_Type2 = 'SUSPENDED'
+		AND pp.Secondary_Employment_Type2 IS NULL THEN 'Position Suspended'
+		WHEN pp.Employment_Type2 = 'SUSPENDED'
+		AND pp.Secondary_Employment_Type2 = 'ACTIVE' THEN 'Position Backfilled'
+		WHEN pp.Employment_Type2 = 'ACTIVE'
+		AND pp.Secondary_Employment_Type2 = 'SUSPENDED' THEN 'Position Backfilled'
 		WHEN pp.assignment_id IS NULL
 		AND position.position_id IS NOT NULL
-		AND rr.requisition_id IS NOT NULL THEN 'Active-Recruitment'
+		AND rr.requisition_id IS NOT NULL THEN 'Position in Active-Recruitment'
 		WHEN pp.assignment_id IS NULL
 		AND position.position_id IS NOT NULL
-		AND rr.requisition_id IS NULL THEN 'Vacant'
-		ELSE 'Occupied'
-	END Position_status
+		AND rr.requisition_id IS NULL THEN 'Position Vacant'
+		ELSE NULL
+	END AS Position_status
 FROM
 	Position
 	LEFT JOIN pivoted_person pp ON pp.position_id = Position.position_id
