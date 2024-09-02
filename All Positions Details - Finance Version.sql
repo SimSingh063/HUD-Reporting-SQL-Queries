@@ -402,7 +402,10 @@ SELECT
 	cch.gm_group_desc,
 	cch.cc_group_desc,
 	Position.Band,
-	Position.mid_value,
+	CASE 
+	    WHEN Position.Department IN ('Finance Reporting and Control', 'Financial Performance and Planning', 'Finance') THEN NULL
+		ELSE Position.mid_value
+	END AS mid_value,
 	1 AS Position_FTE,
 	pp.person_number,
 	pp.Full_Name,
