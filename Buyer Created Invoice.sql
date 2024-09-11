@@ -95,10 +95,14 @@ WHERE
         aila.discarded_flag = 'N'
         OR aila.discarded_flag IS NULL
     )
-    AND aida.reversal_flag = 'N'
+    AND (
+        aida.reversal_flag = 'N'
+        OR aida.reversal_flag IS NULL
+    )
     AND aia.invoice_amount <> 0
     AND aila.amount <> 0
     AND aida.amount <> 0
+    AND pz.vendor_type_lookup_code = 'BCI_SUPPLIER'
     AND zr.registration_number IS NOT NULL
     AND zr.effective_to IS NULL
     AND (
@@ -138,6 +142,7 @@ WHERE
         OR aila.amount <> 0
     )
     AND zr.registration_number IS NOT NULL
+    AND pz.vendor_type_lookup_code = 'BCI_SUPPLIER'
     AND hp.party_name = :SupplierName
 ORDER BY
     aia.invoice_num
@@ -146,7 +151,8 @@ ORDER BY
 SELECT
     DISTINCT hp.party_name AS Supplier_Name
 FROM
-    hz_parties hp
+    poz_suppliers pz
+    INNER JOIN hz_parties hp ON pz.party_id = hp.party_id
     INNER JOIN hz_party_sites hps ON hps.party_id = hp.party_id
     INNER JOIN zx_party_tax_profile zpt ON zpt.party_id = hp.party_id
     INNER JOIN zx_registrations zr ON zr.party_tax_profile_id = zpt.party_tax_profile_id
@@ -161,5 +167,6 @@ FROM
             iep.remit_advice_email IS NOT NULL
     ) re ON re.payee_party_id = hps.party_id
     AND re.party_site_id = hps.party_site_id
+    AND pz.vendor_type_lookup_code = 'BCI_SUPPLIER'
 ORDER BY
     hp.party_name
