@@ -51,7 +51,10 @@ SELECT
     'PO Box 82 Wellington NZ 6140' AS Buyer_Address,
     re.remit_advice_email,
     aida.po_distribution_id,
-    po.Purchase_Order_Number
+    po.Purchase_Order_Number,
+    hp.party_id,
+    hps.party_site_id, 
+    bnk_no.bank_number || '-' || bnk_no.branch_number || '-' || bnk_no.bank_account_num || '-' || bnk_no.account_suffix AS Bank_Account_Number
 FROM
     ap_invoices_all aia
     INNER JOIN ap_invoice_lines_all aila ON aia.invoice_id = aila.invoice_id
@@ -67,7 +70,7 @@ FROM
         SELECT
             DISTINCT iep.payee_party_id,
             iep.party_site_id,
-            iep.supplier_site_id, 
+            iep.supplier_site_id,
             iep.remit_advice_email
         FROM
             iby_external_payees_all iep
@@ -88,6 +91,30 @@ FROM
             INNER JOIN po_distributions_all pod ON pla.po_header_id = pod.po_header_id
             AND pla.po_line_id = pod.po_line_id
     ) po ON po.po_distribution_id = aida.po_distribution_id
+    INNER JOIN (
+        SELECT
+            iep.supplier_site_id,
+            ipi.instrument_id, 
+            ipi.start_date,
+            ipi.end_date,
+            iao.ext_bank_account_id,
+            iao.account_owner_party_id,
+            ieb.bank_account_num,
+            ieb.account_suffix, 
+            cbbv.bank_branch_name,
+            cbbv.branch_number,
+            cbbv.bank_name,
+            cbbv.bank_number
+        FROM
+            iby_external_payees_all iep
+            INNER JOIN iby_pmt_instr_uses_all ipi ON iep.ext_payee_id = ipi.ext_pmt_party_id
+            INNER JOIN iby_account_owners iao ON iep.payee_party_id = iao.account_owner_party_id AND iao.ext_bank_account_id = ipi.instrument_id
+            LEFT JOIN iby_ext_bank_accounts ieb ON iao.ext_bank_account_id = ieb.ext_bank_account_id 
+            LEFT JOIN ce_bank_branches_v cbbv ON cbbv.branch_party_id = ieb.branch_id
+        WHERE
+            ipi.instrument_type = 'BANKACCOUNT'
+            AND iep.payment_function = 'PAYABLES_DISB'
+    ) bnk_no ON bnk_no.supplier_site_id = aia.vendor_site_id AND aia.party_id = bnk_no.account_owner_party_id AND aia.external_bank_account_id = bnk_no.ext_bank_account_id
 WHERE
     aia.approval_status = 'APPROVED'
     AND aila.line_type_lookup_code IN ('ITEM', 'TAX')
@@ -115,8 +142,7 @@ WHERE
     )
 ORDER BY
     aia.invoice_id,
-    aila.line_number 
-    
+    aila.line_number
     
     ---------------------------------------------------Report Filters------------------------------------------------------------------
     /*Invoice Num Filter*/
@@ -146,7 +172,7 @@ WHERE
     AND hp.party_name = :SupplierName
 ORDER BY
     aia.invoice_num
-
+ 
     /*Supplier Name Filter*/
 SELECT
     DISTINCT hp.party_name AS Supplier_Name
