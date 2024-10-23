@@ -422,10 +422,30 @@ SELECT
     prr.postal_code,
     prr.country,
     prr.Emergency_Contact_name1,
-    prr.contact_type1,
+    CASE 
+        WHEN prr.contact_type1 = 'C' THEN 'Child'
+        WHEN prr.contact_type1 = 'P' THEN 'Parent'
+        WHEN prr.contact_type1 = 'S' THEN 'Spouse'
+        WHEN prr.contact_type1 = 'F' THEN 'Friend'
+        WHEN prr.contact_type1 = 'HUD_SIBLING' THEN 'Sibling'
+        WHEN prr.contact_type1 = 'HUD_RELATIVE' THEN 'Relative'
+        WHEN prr.contact_type1 = 'HUD_PARTNER' THEN 'Partner'
+        WHEN prr.contact_type1 = 'HUD_NCR' OR prr.contact_type1 = 'EMRG' THEN 'Contact not defined'
+        ELSE NULL
+    END AS contact_type1,
     prr.Emergency_contact_phn_no1,
     prr.Emergency_Contact_name2,
-    prr.contact_type2,
+    CASE 
+        WHEN prr.contact_type2 = 'C' THEN 'Child'
+        WHEN prr.contact_type2 = 'P' THEN 'Parent'
+        WHEN prr.contact_type2 = 'S' THEN 'Spouse'
+        WHEN prr.contact_type2 = 'F' THEN 'Friend'
+        WHEN prr.contact_type2 = 'HUD_SIBLING' THEN 'Sibling'
+        WHEN prr.contact_type2 = 'HUD_RELATIVE' THEN 'Relative'
+        WHEN prr.contact_type2 = 'HUD_PARTNER' THEN 'Partner'
+        WHEN prr.contact_type2 = 'HUD_NCR' OR prr.contact_type2 = 'EMRG' THEN 'Contact not defined'
+        ELSE NULL
+    END AS contact_type2,
     prr.Emergency_contact_phn_no2
 FROM
     pivoted_person pip

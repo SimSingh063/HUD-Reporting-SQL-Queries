@@ -604,7 +604,7 @@ FROM
                 OR action_reason = '42 Redundancy' THEN 42
                 WHEN action_reason = '43 Retraining' THEN 43
                 WHEN action_reason = '44 Enhanced early retirement' THEN 44
-                WHEN action_reason = '45 Voluntary redundancy' THEN 45
+                WHEN action_reason = '45 Voluntary Redundancy' THEN 45 
                 WHEN action_reason = '50 Dismissal' THEN 50
                 WHEN action_reason = '60 Retirement' THEN 60
                 WHEN action_reason = '70 Death' THEN 70
